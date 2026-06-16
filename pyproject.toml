@@ -1,0 +1,60 @@
+[project]
+name = "indusense"
+version = "0.1.0"
+description = "InduSense 4.0 — Sprint 01 : enquête et nettoyage de données (maintenance prédictive)"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+license = { text = "Proprietary" }
+authors = [{ name = "Patrick Alauzet" }]
+
+# Dépendances Sprint 01 (US 1.1 -> 1.5 : exploration, anonymisation,
+# intégration SQLAlchemy, outliers/imputation, time-series split, PCA).
+dependencies = [
+    "pandas>=2.2",
+    "numpy>=2.1",
+    "scipy>=1.14",
+    "scikit-learn>=1.5",
+    "sqlalchemy>=2.0",
+    "pyodbc>=5.1",        # driver SQL Server (ODBC Driver 17)
+    "matplotlib>=3.9",
+    "seaborn>=0.13",
+    "pyarrow>=17.0",      # Gold Dataset au format parquet
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+indusense-ingest = "indusense.data.ingest:main"
+
+[dependency-groups]
+# Outillage de dev — installé via `uv sync` (groupe activé par défaut).
+dev = [
+    "jupyterlab>=4.2",
+    "ipykernel>=6.29",
+    "pytest>=8.3",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/indusense"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.mypy]
+python_version = "3.13"
+packages = ["indusense"]
+ignore_missing_imports = true

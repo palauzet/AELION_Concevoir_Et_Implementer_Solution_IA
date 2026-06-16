@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Environnements virtuels / uv
+.venv/
+.uv/
+
+# Données dérivées (le brut reste versionné selon stratégie DVC à venir)
+data/interim/
+data/processed/
+*.parquet
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Outils
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets / config locale
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
