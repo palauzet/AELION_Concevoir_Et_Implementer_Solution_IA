@@ -24,6 +24,7 @@ dependencies = [
 
 [project.scripts]
 indusense-ingest = "indusense.data.ingest:main"
+indusense-incidents = "indusense.data.incidents_ingest:main"
 
 [dependency-groups]
 # Outillage de dev — installé via `uv sync` (groupe activé par défaut).

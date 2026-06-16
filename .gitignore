@@ -15,6 +15,10 @@ data/interim/
 data/processed/
 *.parquet
 
+# Artefacts d'ingestion générés (run versionné par dossier horodaté ; DVC au Sprint 3).
+# Le journal (runs.json/runs.md) et METHODOLOGIE.md restent versionnés.
+artifacts/ingestions/incidents/*/
+
 # Notebooks
 .ipynb_checkpoints/
 

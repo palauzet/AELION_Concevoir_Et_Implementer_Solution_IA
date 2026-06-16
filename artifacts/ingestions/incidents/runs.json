@@ -1,0 +1,35 @@
+[
+  {
+    "run_id": "202606161455",
+    "timestamp": "2026-06-16T14:55:37",
+    "source": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\data\\raw\\releves_incidents.csv",
+    "n_lignes": 900,
+    "n_colonnes": 27,
+    "machines_uniques": 15,
+    "n_nan_total": 59,
+    "confidence_moyenne": 0.984,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\ingestions\\incidents\\202606161455"
+  },
+  {
+    "run_id": "202606161503",
+    "timestamp": "2026-06-16T15:03:04",
+    "source": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\data\\raw\\releves_incidents.csv",
+    "n_lignes": 900,
+    "n_colonnes": 27,
+    "machines_uniques": 15,
+    "n_nan_total": 59,
+    "confidence_moyenne": 0.984,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\ingestions\\incidents\\202606161503"
+  },
+  {
+    "run_id": "202606161503",
+    "timestamp": "2026-06-16T15:03:39",
+    "source": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\data\\raw\\releves_incidents.csv",
+    "n_lignes": 900,
+    "n_colonnes": 27,
+    "machines_uniques": 15,
+    "n_nan_total": 59,
+    "confidence_moyenne": 0.984,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\ingestions\\incidents\\202606161503"
+  }
+]

@@ -33,6 +33,24 @@ RAW_MACHINE_SQL = DATA_RAW / "machine.sql"
 # Gold Dataset final (US 1.5).
 GOLD_DATASET = DATA_PROCESSED / "gold_dataset.parquet"
 
+# --- Artefacts d'ingestion (runs horodatés, versionnés) ---------------------
+ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
+INGEST_INCIDENTS_DIR = ARTIFACTS_DIR / "ingestions" / "incidents"
+RUN_TS_FORMAT = "%Y%m%d%H%M"  # dossier de run : AAAAMMJJHHMM
+
+# Les 9 signaux d'incident (flags type_*), ordre stable pour le dataset/figures.
+INCIDENT_SIGNALS = (
+    "type_surchauffe",
+    "type_baisse_pression",
+    "type_vibration",
+    "type_bruit_mecanique",
+    "type_surconsommation",
+    "type_blocage_mecanique",
+    "type_alarme_capteur",
+    "type_arret_urgence",
+    "type_defaut_qualite",
+)
+
 # --- SQL Server -------------------------------------------------------------
 SQL_SERVER = os.getenv("INDUSENSE_SQL_SERVER", "XANADU-PC03")
 SQL_DATABASE = os.getenv("INDUSENSE_SQL_DATABASE", "AELION_SPRINT01")
