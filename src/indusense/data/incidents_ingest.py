@@ -124,7 +124,7 @@ def _legend_twin(ax: plt.Axes, ax2: plt.Axes) -> None:
 
 
 def make_figures(df: pd.DataFrame, out_dir: Path) -> list[str]:
-    """Génère les 7 graphes d'analyse (SVG) dans ``out_dir``. Retourne les noms de fichiers.
+    """Génère les 8 graphes d'analyse (SVG) dans ``out_dir``. Retourne les noms de fichiers.
 
     Chaque figure embarque une **légende explicative** (ce que le graphe mesure).
     """
@@ -218,15 +218,25 @@ def make_figures(df: pd.DataFrame, out_dir: Path) -> list[str]:
           "Mesure : distribution de l'indice de confiance des signalements = cohérence des "
           "flags + présence du commentaire + validité machine/sévérité.")
 
-    # 7. Corrélation signaux + severity
-    corr = df[[*signals, "severity"]].corr()
+    # 7. Corrélation de Pearson (linéaire) — signaux + severity
+    corr_p = df[[*signals, "severity"]].corr(method="pearson")
     fig, ax = plt.subplots(figsize=(8.5, 7))
-    sns.heatmap(corr, cmap="coolwarm", center=0, annot=True, fmt=".2f", square=True,
+    sns.heatmap(corr_p, cmap="coolwarm", center=0, annot=True, fmt=".2f", square=True,
                 cbar_kws={"shrink": 0.8}, ax=ax, annot_kws={"size": 6})
-    ax.set_title("Corrélation entre signaux (et severity)")
-    _save(fig, "correlation_signaux.svg",
-          "Mesure : corrélation de Pearson entre les 9 signaux et la sévérité. "
+    ax.set_title("Corrélation de Pearson (linéaire) — signaux + severity")
+    _save(fig, "correlation_signaux_pearson.svg",
+          "Mesure : corrélation linéaire de Pearson entre les 9 signaux et la sévérité. "
           "≈0 = signaux quasi exclusifs ; >0 = co-occurrence ; <0 = exclusion mutuelle.")
+
+    # 8. Corrélation de Spearman (monotone, sur les rangs) — signaux + severity
+    corr_s = df[[*signals, "severity"]].corr(method="spearman")
+    fig, ax = plt.subplots(figsize=(8.5, 7))
+    sns.heatmap(corr_s, cmap="PuOr", center=0, annot=True, fmt=".2f", square=True,
+                cbar_kws={"shrink": 0.8}, ax=ax, annot_kws={"size": 6})
+    ax.set_title("Corrélation de Spearman (monotone, rangs) — signaux + severity")
+    _save(fig, "correlation_signaux_spearman.svg",
+          "Mesure : corrélation de Spearman (sur les rangs) entre les 9 signaux et la "
+          "sévérité. Capte les liens monotones, y compris non linéaires ; robuste aux outliers.")
 
     return files
 
@@ -278,11 +288,42 @@ def write_methodologie() -> None:
     content = f"""# Méthodologie — ingestion des incidents
 
 ## Anonymisation des opérateurs (RGPD)
-`operator_name` et `operator_badge` sont des **identifiants directs** (DCP). Ils ne
-sont pas nécessaires aux analyses et sont donc **supprimés** (minimisation). Comme
-aucune table de correspondance n'est conservée, l'anonymisation est **irréversible**
-et le dataset sort du périmètre RGPD. `comment` est **conservé** (saisie guidée
-décrivant le type de panne, sans donnée personnelle).
+
+### Finalité du traitement (étalon de la minimisation)
+Analyser les **relevés d'incidents machines** (distribution temporelle, typologie des
+pannes, corrélations entre signaux, fiabilité du signalement) pour préparer une
+solution de **maintenance prédictive**. Finalité **centrée machine, pas opérateur** :
+c'est elle qui détermine ce qui est nécessaire.
+
+### Principe de minimisation (RGPD art. 5.1.c) — test de nécessité
+Données « adéquates, pertinentes et limitées à ce qui est nécessaire au regard des
+finalités ». Appliqué champ par champ :
+
+| Champ | Nécessaire à la finalité (machine) ? | Décision |
+|---|---|---|
+| `operator_name` | Non — l'identité n'explique pas la panne | **Supprimé** |
+| `operator_badge` | Non — aucune analyse *par opérateur* retenue | **Supprimé** |
+| `machine_id`, `date`, `shift`, signaux | Oui — cœur de l'analyse | Conservés |
+| `comment` | Oui (type de panne) **et** non-DCP | Conservé |
+
+### Proportionnalité : suppression plutôt que pseudonymisation
+Un pseudonyme (hash salé) ne se justifierait que si une **finalité d'analyse par
+opérateur** était retenue (ex. détecter un biais de signalement) — ce **n'est pas le
+cas**. Conserver un pseudo-identifiant serait donc une donnée **excessive** et
+porterait un **risque résiduel** de ré-identification. La **suppression** est l'option
+la plus protectrice *et* suffisante (*privacy by design*, art. 25). Aucune table de
+correspondance n'étant conservée, l'anonymisation est **irréversible** et le dataset
+sort du périmètre RGPD.
+
+### Risque de ré-identification indirecte
+Les quasi-identifiants restants (`shift` × `machine_id` × `date`) sont **nécessaires**
+et donc conservés. Le risque résiduel est **réduit** (plus d'identifiant direct) et
+**maîtrisé** (usage interne). Une diffusion externe imposerait un **k-anonymat** sur
+ces colonnes.
+
+### Traçabilité (accountability, art. 5.2)
+Décision prouvable via : cette note, la docstring de `anonymize_operators` (règle +
+justification) et l'historique git (décision datée et signée).
 
 ## Indice de confiance du signalement (par incident)
 Score dans [0, 1] mesurant la **qualité du relevé** :

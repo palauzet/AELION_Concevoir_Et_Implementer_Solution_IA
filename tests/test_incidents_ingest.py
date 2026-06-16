@@ -59,7 +59,7 @@ def test_run_ingestion_smoke(tmp_path, monkeypatch) -> None:
     assert "operator_name" not in df.columns
     assert len(df) == meta["n_lignes"]
     assert (run_dir / "figures").is_dir()
-    assert len(list((run_dir / "figures").glob("*.svg"))) == 7
+    assert len(list((run_dir / "figures").glob("*.svg"))) == 8
 
     runs = json.loads((tmp_path / "runs.json").read_text(encoding="utf-8"))
     assert runs[-1]["run_id"] == meta["run_id"]
