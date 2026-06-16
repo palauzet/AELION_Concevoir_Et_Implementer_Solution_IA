@@ -37,3 +37,6 @@ artifacts/ingestions/incidents/*/
 .idea/
 Thumbs.db
 desktop.ini
+
+# Exports de notebooks (rendus générés)
+notebooks/*.html
