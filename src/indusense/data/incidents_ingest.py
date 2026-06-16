@@ -336,6 +336,20 @@ Score dans [0, 1] mesurant la **qualité du relevé** :
 | `severity_valide` | 1.0 si `severity` ∈ [1, 5] |
 
 `confidence = {weights}`
+
+## Relation `comment` ↔ flags (qualité & data leakage)
+Constat vérifié sur les données : le `comment` est une **saisie guidée** en
+correspondance **déterministe** avec les flags `type_*` (1 commentaire distinct par
+signal, **aucune contradiction**). Cas particulier : `type_arret_urgence` n'apparaît
+**jamais seul** — c'est un marqueur d'escalade encodé « … + arrêt ligne ». Seul écart :
+59 commentaires manquants, répartis aléatoirement.
+
+**Conséquences :**
+- **Qualité** : `comment` et flags sont **mutuellement vérifiables** (validation croisée,
+  reconstruction d'un label manquant).
+- **Feature engineering** : `comment` est une **redondance** des flags (colinéarité
+  parfaite). À **exclure des features ML** — l'utiliser serait un **data leakage**
+  (le commentaire *est* l'étiquette de la panne).
 """
     (config.INGEST_INCIDENTS_DIR / "METHODOLOGIE.md").write_text(content, encoding="utf-8")
 
