@@ -118,7 +118,29 @@ def compute_metrics(df: pd.DataFrame) -> dict:
     }
 
 
-# --- Association sévérité ↔ type de panne -----------------------------------
+# --- Associations (variables catégorielles) ---------------------------------
+def _chi2_cramers_v(contingence: pd.DataFrame) -> dict:
+    """χ² d'indépendance + V de Cramér **corrigé du biais** (*Bergsma 2013*).
+
+    Retourne ``chi2``, ``dof``, ``p_chi2``, ``cramers_v`` (∈ [0, 1]) et le nombre de
+    cellules à effectif théorique < 5 (validité du χ²).
+    """
+    chi2, p_chi2, dof, expected = stats.chi2_contingency(contingence)
+    n = int(contingence.values.sum())
+    r, c = contingence.shape
+    phi2_corr = max(0.0, chi2 / n - (c - 1) * (r - 1) / (n - 1))
+    r_corr = r - (r - 1) ** 2 / (n - 1)
+    c_corr = c - (c - 1) ** 2 / (n - 1)
+    cramers_v = float(np.sqrt(phi2_corr / max(1e-12, min(r_corr - 1, c_corr - 1))))
+    return {
+        "chi2": float(chi2),
+        "dof": int(dof),
+        "p_chi2": float(p_chi2),
+        "cramers_v": cramers_v,
+        "cellules_exp_faibles": int((expected < 5).sum()),
+    }
+
+
 def severity_type_association(df: pd.DataFrame) -> dict:
     """Mesure l'association entre la **sévérité** (ordinale) et le **type de panne** (nominal).
 
@@ -149,29 +171,62 @@ def severity_type_association(df: pd.DataFrame) -> dict:
     # χ² + V de Cramér sur la contingence (sévérités 3/4/5 regroupées en « 3+ »).
     sev_grp = long["severity"].clip(upper=3)
     contingence = pd.crosstab(long["type_panne"], sev_grp)
-    chi2, p_chi2, dof, expected = stats.chi2_contingency(contingence)
-    n = int(contingence.values.sum())
-    r, c = contingence.shape
-    phi2_corr = max(0.0, chi2 / n - (c - 1) * (r - 1) / (n - 1))
-    r_corr = r - (r - 1) ** 2 / (n - 1)
-    c_corr = c - (c - 1) ** 2 / (n - 1)
-    cramers_v = float(np.sqrt(phi2_corr / max(1e-12, min(r_corr - 1, c_corr - 1))))
+    chi = _chi2_cramers_v(contingence)
 
     # Kruskal-Wallis (sévérité continue ~ type) + ε² (taille d'effet).
     groups = [g["severity"].to_numpy() for _, g in long.groupby("type_panne")]
     k = len(groups)
     H, p_kruskal = stats.kruskal(*groups)
-    epsilon2 = float((H - k + 1) / (len(long) - k))
+    epsilon2 = float((H - k + 1) / (len(long) - k)) if len(long) > k else 0.0
 
     return {
         "n_couples": int(len(long)),
         "sev_par_type": sev_par_type,
         "contingence": contingence,
-        "chi2": float(chi2),
-        "dof": int(dof),
-        "p_chi2": float(p_chi2),
-        "cramers_v": cramers_v,
-        "cellules_exp_faibles": int((expected < 5).sum()),
+        **chi,
+        "kruskal_H": float(H),
+        "p_kruskal": float(p_kruskal),
+        "epsilon2": epsilon2,
+    }
+
+
+def machine_association(df: pd.DataFrame) -> dict:
+    """Étude **par machine** : la sévérité et le type de panne dépendent-ils de la machine ?
+
+    - sévérité **ordinale** × machine **nominale** → **Kruskal-Wallis** + ε² (taille
+      d'effet), test robuste sans hypothèse de normalité ;
+    - machine **nominale** × type **nominal** (multi-étiquette) → **χ²** + **V de Cramér**
+      corrigé, sur le format *long* (un couple par incident × signal actif).
+
+    Retourne un dict : tableau sévérité/machine, contingence machine×type, statistiques.
+    """
+    signals = list(config.INCIDENT_SIGNALS)
+    sev_par_machine = (
+        df.groupby("machine_id")["severity"]
+        .agg(["count", "mean", "std"])
+        .sort_values("mean", ascending=False)
+    )
+
+    # Kruskal-Wallis : la sévérité (ordinale) diffère-t-elle selon la machine ?
+    groups = [g["severity"].to_numpy() for _, g in df.groupby("machine_id")]
+    k = len(groups)
+    H, p_kruskal = stats.kruskal(*groups)
+    epsilon2 = float((H - k + 1) / (len(df) - k)) if len(df) > k else 0.0
+
+    # χ² + V de Cramér : machine × type de panne (format long multi-étiquette).
+    long = df.melt(id_vars=["machine_id"], value_vars=signals,
+                   var_name="type_panne", value_name="present")
+    long = long[long["present"] == 1].copy()
+    long["type_panne"] = long["type_panne"].str.replace("type_", "", regex=False)
+    contingence = pd.crosstab(long["machine_id"], long["type_panne"])
+    chi = _chi2_cramers_v(contingence)
+
+    return {
+        "n_machines": int(df["machine_id"].nunique()),
+        "n_couples": int(len(long)),
+        "sev_par_machine": sev_par_machine,
+        "contingence": contingence,
+        **chi,
         "kruskal_H": float(H),
         "p_kruskal": float(p_kruskal),
         "epsilon2": epsilon2,
@@ -187,7 +242,10 @@ def _legend_twin(ax: plt.Axes, ax2: plt.Axes) -> None:
 
 
 def make_figures(df: pd.DataFrame, out_dir: Path) -> list[str]:
-    """Génère les 8 graphes d'analyse (SVG) dans ``out_dir``. Retourne les noms de fichiers.
+    """Génère les 12 graphes d'analyse (SVG) dans ``out_dir``. Retourne les noms de fichiers.
+
+    Les fichiers sont **préfixés et ordonnés** selon le narratif d'analyse (cadrage
+    temporel → typologie → étude par machine → qualité → corrélations → sévérité×type).
 
     Chaque figure embarque une **légende explicative** (ce que le graphe mesure).
     """
@@ -206,12 +264,13 @@ def make_figures(df: pd.DataFrame, out_dir: Path) -> list[str]:
         plt.close(fig)
         files.append(name)
 
+    # === Bloc 1 — Cadrage temporel =========================================
     # 1. Distribution par jour
     par_jour = df.groupby("jour").size()
     fig, ax = plt.subplots(figsize=(11, 4))
     ax.plot(par_jour.index, par_jour.values, lw=0.9, color="#4C72B0")
-    ax.set(title="Incidents par jour", xlabel="Jour", ylabel="Nombre d'incidents")
-    _save(fig, "dist_incidents_par_jour.svg",
+    ax.set(title="1. Incidents par jour", xlabel="Jour", ylabel="Nombre d'incidents")
+    _save(fig, "01_incidents_par_jour.svg",
           "Mesure : nombre d'incidents signalés par jour sur la période. "
           "Révèle les pics ponctuels et la tendance temporelle.")
 
@@ -222,8 +281,8 @@ def make_figures(df: pd.DataFrame, out_dir: Path) -> list[str]:
     step = max(1, len(par_sem) // 20)
     ax.set_xticks(range(0, len(par_sem), step))
     ax.set_xticklabels(par_sem.index[::step], rotation=90, fontsize=7)
-    ax.set(title="Incidents par semaine (ISO)", xlabel="Semaine", ylabel="Nombre d'incidents")
-    _save(fig, "dist_incidents_par_semaine.svg",
+    ax.set(title="2. Incidents par semaine (ISO)", xlabel="Semaine", ylabel="Nombre d'incidents")
+    _save(fig, "02_incidents_par_semaine.svg",
           "Mesure : volume d'incidents par semaine ISO. "
           "Lisse le bruit journalier pour visualiser la charge hebdomadaire.")
 
@@ -231,11 +290,12 @@ def make_figures(df: pd.DataFrame, out_dir: Path) -> list[str]:
     par_shift = df["shift"].value_counts().reindex(SHIFT_ORDER).fillna(0)
     fig, ax = plt.subplots(figsize=(6, 4))
     sns.barplot(x=par_shift.index, y=par_shift.values, ax=ax, hue=par_shift.index, legend=False)
-    ax.set(title="Incidents par shift", xlabel="Shift", ylabel="Nombre d'incidents")
-    _save(fig, "dist_incidents_par_shift.svg",
+    ax.set(title="3. Incidents par shift", xlabel="Shift", ylabel="Nombre d'incidents")
+    _save(fig, "03_incidents_par_shift.svg",
           "Mesure : répartition des incidents par équipe (matin / après-midi / nuit). "
           "Détecte un éventuel effet d'équipe.")
 
+    # === Bloc 2 — Typologie des pannes =====================================
     # 4. Histogramme par signal (+ confiance moyenne)
     counts = pd.Series({s: int(df[s].sum()) for s in signals}).sort_values(ascending=False)
     conf_sig = {s: df.loc[df[s] == 1, "confidence"].mean() for s in counts.index}
@@ -243,17 +303,18 @@ def make_figures(df: pd.DataFrame, out_dir: Path) -> list[str]:
     ax.bar(range(len(counts)), counts.values, color="#55A868", label="Nombre d'incidents")
     ax.set_xticks(range(len(counts)))
     ax.set_xticklabels(counts.index, rotation=35, ha="right", fontsize=8)
-    ax.set(title="Incidents par signal + confiance moyenne", ylabel="Nombre d'incidents")
+    ax.set(title="4. Incidents par signal + confiance moyenne", ylabel="Nombre d'incidents")
     ax2 = ax.twinx()
     ax2.plot(range(len(counts)), [conf_sig[s] for s in counts.index], "o-",
              color="#C44E52", label="Confiance moyenne")
     ax2.set_ylim(0, 1.05)
     ax2.set_ylabel("Confiance moyenne (0–1)", color="#C44E52")
     _legend_twin(ax, ax2)
-    _save(fig, "hist_par_signal.svg",
+    _save(fig, "04_incidents_par_signal.svg",
           "Mesure : nombre d'incidents par type de signal (barres) et indice de confiance "
           "moyen du signalement (courbe, 0–1). Pannes dominantes et fiabilité de saisie.")
 
+    # === Bloc 3 — Étude par machine ========================================
     # 5. Histogramme par machine (+ confiance moyenne)
     cnt_mach = df["machine_id"].value_counts().sort_index()
     conf_mach = df.groupby("machine_id")["confidence"].mean().reindex(cnt_mach.index)
@@ -261,52 +322,89 @@ def make_figures(df: pd.DataFrame, out_dir: Path) -> list[str]:
     ax.bar(range(len(cnt_mach)), cnt_mach.values, color="#4C72B0", label="Nombre d'incidents")
     ax.set_xticks(range(len(cnt_mach)))
     ax.set_xticklabels(cnt_mach.index, rotation=45, ha="right", fontsize=8)
-    ax.set(title="Incidents par machine + confiance moyenne", ylabel="Nombre d'incidents")
+    ax.set(title="5. Incidents par machine + confiance moyenne", ylabel="Nombre d'incidents")
     ax2 = ax.twinx()
     ax2.plot(range(len(cnt_mach)), conf_mach.values, "o-",
              color="#C44E52", label="Confiance moyenne")
     ax2.set_ylim(0, 1.05)
     ax2.set_ylabel("Confiance moyenne (0–1)", color="#C44E52")
     _legend_twin(ax, ax2)
-    _save(fig, "hist_par_machine.svg",
+    _save(fig, "05_incidents_par_machine.svg",
           "Mesure : nombre d'incidents par machine (barres) et indice de confiance moyen "
           "du signalement (courbe, 0–1). Repère les machines les plus touchées.")
 
-    # 6. Distribution de l'indice de confiance
+    # 6 & 7. Association sévérité ↔ machine et machine × type (Kruskal / χ²)
+    m_assoc = machine_association(df)
+    sev_m = m_assoc["sev_par_machine"]
+    moy_globale = float(df["severity"].mean())
+
+    # 6. Sévérité moyenne par machine
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    ax.barh(range(len(sev_m)), sev_m["mean"].to_numpy(), color="#4C72B0")
+    ax.set_yticks(range(len(sev_m)))
+    ax.set_yticklabels(sev_m.index, fontsize=8)
+    ax.invert_yaxis()  # machine la plus sévère en haut
+    ax.axvline(moy_globale, color="#444444", ls="--", lw=1,
+               label=f"moyenne globale ({moy_globale:.2f})")
+    for i, (m, eff) in enumerate(zip(sev_m["mean"], sev_m["count"], strict=True)):
+        ax.text(m + 0.03, i, f"{m:.2f} (n={int(eff)})", va="center", fontsize=7.5)
+    ax.set(title="6. Sévérité moyenne par machine", xlabel="Sévérité moyenne (1–5)")
+    ax.set_xlim(0, max(sev_m["mean"]) * 1.18)
+    ax.legend(loc="lower right", fontsize=8)
+    _save(fig, "06_severite_par_machine.svg",
+          f"Mesure : sévérité moyenne (1–5) par machine. Kruskal-Wallis "
+          f"p={m_assoc['p_kruskal']:.2f} (> 0,05), ε²={m_assoc['epsilon2']:.3f} ≈ 0 : "
+          f"la sévérité est indépendante de la machine.")
+
+    # 7. Profil machine × type de panne (contingence)
+    ctm = m_assoc["contingence"]
+    fig, ax = plt.subplots(figsize=(9, 6.5))
+    sns.heatmap(ctm, cmap="Blues", annot=True, fmt="d", square=False,
+                cbar_kws={"shrink": 0.8}, ax=ax, annot_kws={"size": 7})
+    ax.set(title="7. Profil machine × type de panne", xlabel="Type de panne", ylabel="Machine")
+    plt.setp(ax.get_xticklabels(), rotation=35, ha="right", fontsize=8)
+    _save(fig, "07_machine_x_type.svg",
+          f"Mesure : effectifs croisés machine × type ({m_assoc['n_couples']} couples). "
+          f"χ²({m_assoc['dof']})={m_assoc['chi2']:.0f}, p={m_assoc['p_chi2']:.2f} (> 0,05), "
+          f"V de Cramér={m_assoc['cramers_v']:.2f} : type de panne indépendant de la machine.")
+
+    # === Bloc 4 — Qualité du signalement ===================================
+    # 8. Distribution de l'indice de confiance
     fig, ax = plt.subplots(figsize=(7, 4))
     sns.histplot(df["confidence"], bins=20, ax=ax, color="#8172B3")
-    ax.set(title="Distribution de l'indice de confiance", xlabel="Confiance (0–1)",
+    ax.set(title="8. Distribution de l'indice de confiance", xlabel="Confiance (0–1)",
            ylabel="Effectif")
-    _save(fig, "hist_confiance.svg",
+    _save(fig, "08_indice_confiance.svg",
           "Mesure : distribution de l'indice de confiance des signalements = cohérence des "
           "flags + présence du commentaire + validité machine/sévérité.")
 
-    # 7. Corrélation de Pearson (linéaire) — signaux + severity
+    # === Bloc 5 — Corrélations entre signaux ===============================
+    # 9. Corrélation de Pearson (linéaire) — signaux + severity
     corr_p = df[[*signals, "severity"]].corr(method="pearson")
     fig, ax = plt.subplots(figsize=(8.5, 7))
     sns.heatmap(corr_p, cmap="coolwarm", center=0, annot=True, fmt=".2f", square=True,
                 cbar_kws={"shrink": 0.8}, ax=ax, annot_kws={"size": 6})
-    ax.set_title("Corrélation de Pearson (linéaire) — signaux + severity")
-    _save(fig, "correlation_signaux_pearson.svg",
+    ax.set_title("9. Corrélation de Pearson (linéaire) — signaux + severity")
+    _save(fig, "09_correlation_pearson.svg",
           "Mesure : corrélation linéaire de Pearson entre les 9 signaux et la sévérité. "
           "≈0 = signaux quasi exclusifs ; >0 = co-occurrence ; <0 = exclusion mutuelle.")
 
-    # 8. Corrélation de Spearman (monotone, sur les rangs) — signaux + severity
+    # 10. Corrélation de Spearman (monotone, sur les rangs) — signaux + severity
     corr_s = df[[*signals, "severity"]].corr(method="spearman")
     fig, ax = plt.subplots(figsize=(8.5, 7))
     sns.heatmap(corr_s, cmap="PuOr", center=0, annot=True, fmt=".2f", square=True,
                 cbar_kws={"shrink": 0.8}, ax=ax, annot_kws={"size": 6})
-    ax.set_title("Corrélation de Spearman (monotone, rangs) — signaux + severity")
-    _save(fig, "correlation_signaux_spearman.svg",
+    ax.set_title("10. Corrélation de Spearman (monotone, rangs) — signaux + severity")
+    _save(fig, "10_correlation_spearman.svg",
           "Mesure : corrélation de Spearman (sur les rangs) entre les 9 signaux et la "
           "sévérité. Capte les liens monotones, y compris non linéaires ; robuste aux outliers.")
 
-    # 9 & 10. Association sévérité ↔ type de panne (variable nominale -> χ²/Kruskal)
+    # === Bloc 6 — Sévérité ↔ type de panne =================================
+    # 11 & 12. Association sévérité ↔ type de panne (variable nominale -> χ²/Kruskal)
     assoc = severity_type_association(df)
     sev_t = assoc["sev_par_type"]
-    moy_globale = float(df["severity"].mean())
 
-    # 9. Sévérité moyenne par type de panne
+    # 11. Sévérité moyenne par type de panne
     fig, ax = plt.subplots(figsize=(9, 5))
     ax.barh(range(len(sev_t)), sev_t["mean"].to_numpy(), color="#DD8452")
     ax.set_yticks(range(len(sev_t)))
@@ -316,22 +414,22 @@ def make_figures(df: pd.DataFrame, out_dir: Path) -> list[str]:
                label=f"moyenne globale ({moy_globale:.2f})")
     for i, (m, eff) in enumerate(zip(sev_t["mean"], sev_t["count"], strict=True)):
         ax.text(m + 0.03, i, f"{m:.2f} (n={int(eff)})", va="center", fontsize=7.5)
-    ax.set(title="Sévérité moyenne par type de panne", xlabel="Sévérité moyenne (1–5)")
+    ax.set(title="11. Sévérité moyenne par type de panne", xlabel="Sévérité moyenne (1–5)")
     ax.set_xlim(0, max(sev_t["mean"]) * 1.18)
     ax.legend(loc="lower right", fontsize=8)
-    _save(fig, "severite_moyenne_par_type.svg",
+    _save(fig, "11_severite_par_type.svg",
           f"Mesure : sévérité moyenne (1–5) par type de panne (multi-étiquette, "
           f"{assoc['n_couples']} couples). Kruskal-Wallis p={assoc['p_kruskal']:.1e}, "
           f"ε²={assoc['epsilon2']:.3f} : le type influence la sévérité, mais faiblement.")
 
-    # 10. Table de contingence type × sévérité (3+ regroupé)
+    # 12. Table de contingence type × sévérité (3+ regroupé)
     ct = assoc["contingence"]
     fig, ax = plt.subplots(figsize=(7, 6))
     sns.heatmap(ct, cmap="Reds", annot=True, fmt="d", square=False,
                 cbar_kws={"shrink": 0.8}, ax=ax, annot_kws={"size": 8})
-    ax.set(title="Contingence type de panne × sévérité",
+    ax.set(title="12. Contingence type de panne × sévérité",
            xlabel="Sévérité (1 / 2 / 3+)", ylabel="Type de panne")
-    _save(fig, "contingence_type_severite.svg",
+    _save(fig, "12_contingence_type_severite.svg",
           f"Mesure : effectifs croisés type × sévérité (3/4/5 regroupés en « 3+ »). "
           f"χ²({assoc['dof']})={assoc['chi2']:.0f}, p={assoc['p_chi2']:.1e} (lien réel) ; "
           f"V de Cramér={assoc['cramers_v']:.2f} = association faible à modérée.")
@@ -465,6 +563,21 @@ Les sévérités rares (3/4/5) sont regroupées en « 3+ » pour garantir la val
 mais faible à modérée** (V de Cramér ≈ 0,24) — portée surtout par `arret_urgence` (quasi
 toujours critique), puis `surchauffe` / `blocage_mecanique`. Le type **seul** ne suffit
 pas à prédire la sévérité : la télémétrie restera nécessaire.
+
+## Étude par machine (choix des tests)
+Mêmes principes appliqués à la dimension **machine** (`machine_association`) :
+
+| Question | Test |
+|---|---|
+| La sévérité dépend-elle de la machine ? (ordinale × nominale) | Kruskal-Wallis + ε² |
+| Le type de panne dépend-il de la machine ? (2 nominales, *long*) | χ² + V de Cramér |
+
+La contingence machine × type (15 × 9) comporte des cellules à effectif théorique < 5
+(à signaler) ; le Kruskal-Wallis, robuste, reste fiable. **Résultat** : ni la sévérité
+(Kruskal p ≈ 0,60), ni le type de panne (χ², V de Cramér ≈ 0) ne dépendent de la machine
+— le parc se comporte de façon **homogène**, aucune machine ne se distingue par un profil
+de pannes ou une gravité particulière. Pas de ciblage maintenance machine par machine
+justifié à ce stade.
 """
     (config.INGEST_INCIDENTS_DIR / "METHODOLOGIE.md").write_text(content, encoding="utf-8")
 

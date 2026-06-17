@@ -80,3 +80,18 @@ Les sévérités rares (3/4/5) sont regroupées en « 3+ » pour garantir la val
 mais faible à modérée** (V de Cramér ≈ 0,24) — portée surtout par `arret_urgence` (quasi
 toujours critique), puis `surchauffe` / `blocage_mecanique`. Le type **seul** ne suffit
 pas à prédire la sévérité : la télémétrie restera nécessaire.
+
+## Étude par machine (choix des tests)
+Mêmes principes appliqués à la dimension **machine** (`machine_association`) :
+
+| Question | Test |
+|---|---|
+| La sévérité dépend-elle de la machine ? (ordinale × nominale) | Kruskal-Wallis + ε² |
+| Le type de panne dépend-il de la machine ? (2 nominales, *long*) | χ² + V de Cramér |
+
+La contingence machine × type (15 × 9) comporte des cellules à effectif théorique < 5
+(à signaler) ; le Kruskal-Wallis, robuste, reste fiable. **Résultat** : ni la sévérité
+(Kruskal p ≈ 0,60), ni le type de panne (χ², V de Cramér ≈ 0) ne dépendent de la machine
+— le parc se comporte de façon **homogène**, aucune machine ne se distingue par un profil
+de pannes ou une gravité particulière. Pas de ciblage maintenance machine par machine
+justifié à ce stade.

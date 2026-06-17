@@ -61,6 +61,17 @@ def test_severity_type_association() -> None:
     assert 0.0 <= assoc["p_kruskal"] <= 1.0
 
 
+def test_machine_association() -> None:
+    df = ing.enrich(anonymize_operators(_sample()))
+    assoc = ing.machine_association(df)
+    assert assoc["n_machines"] == 2  # MACH-01, MACH-02
+    assert set(assoc["sev_par_machine"].index) == {"MACH-01", "MACH-02"}
+    # Statistiques bien bornées.
+    assert 0.0 <= assoc["cramers_v"] <= 1.0
+    assert 0.0 <= assoc["p_chi2"] <= 1.0
+    assert 0.0 <= assoc["p_kruskal"] <= 1.0
+
+
 def test_run_ingestion_smoke(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(config, "INGEST_INCIDENTS_DIR", tmp_path)
     meta = ing.run_ingestion()
@@ -83,7 +94,7 @@ def test_run_ingestion_smoke(tmp_path, monkeypatch) -> None:
     assert comments.str.contains("mécanique").any()
     assert not comments.str.contains("Ã").any()
     assert (run_dir / "figures").is_dir()
-    assert len(list((run_dir / "figures").glob("*.svg"))) == 10
+    assert len(list((run_dir / "figures").glob("*.svg"))) == 12
 
     runs = json.loads((tmp_path / "runs.json").read_text(encoding="utf-8"))
     assert runs[-1]["run_id"] == meta["run_id"]
