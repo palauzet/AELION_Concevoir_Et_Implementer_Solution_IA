@@ -63,3 +63,20 @@ signal, **aucune contradiction**). Cas particulier : `type_arret_urgence` n'appa
 - **Feature engineering** : `comment` est une **redondance** des flags (colinéarité
   parfaite). À **exclure des features ML** — l'utiliser serait un **data leakage**
   (le commentaire *est* l'étiquette de la panne).
+
+## Corrélation sévérité ↔ type de panne (choix des tests)
+La sévérité est **ordinale** (1–5) et le type de panne **nominal** (9 catégories,
+multi-étiquette) : Pearson/Spearman ne s'appliquent pas à une variable nominale. On
+utilise donc, sur le format *long* (1 ligne par couple incident × signal actif) :
+
+| Test | Mesure | Lecture |
+|---|---|---|
+| χ² d'indépendance | significativité | le lien est-il dû au hasard ? |
+| V de Cramér (corrigé du biais) | taille d'effet ∈ [0, 1] | intensité de l'association |
+| Kruskal-Wallis + ε² | distribution ordinale par groupe | la sévérité dépend-elle du type ? |
+
+Les sévérités rares (3/4/5) sont regroupées en « 3+ » pour garantir la validité du χ²
+(effectifs théoriques ≥ 5). **Résultat** : association **statistiquement significative
+mais faible à modérée** (V de Cramér ≈ 0,24) — portée surtout par `arret_urgence` (quasi
+toujours critique), puis `surchauffe` / `blocage_mecanique`. Le type **seul** ne suffit
+pas à prédire la sévérité : la télémétrie restera nécessaire.

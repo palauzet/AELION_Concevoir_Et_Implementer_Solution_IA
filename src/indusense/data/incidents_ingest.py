@@ -8,7 +8,8 @@ Sorties (sous ``config.INGEST_INCIDENTS_DIR``) :
 
 - ``runs.json`` / ``runs.md`` : journal des runs (lignes, colonnes, machines, NaN).
 - ``METHODOLOGIE.md`` : justification anonymisation + définition de l'indice de confiance.
-- ``AAAAMMJJHHMM/`` : un dossier par run avec le parquet, les métadonnées et ``figures/``.
+- ``AAAAMMJJHHMM/`` : un dossier par run avec le dataset retenu (parquet **et** CSV),
+  les métadonnées et ``figures/``.
 
 Usage :
 
@@ -27,8 +28,10 @@ import matplotlib
 matplotlib.use("Agg")  # backend non interactif (génération de fichiers)
 
 import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import seaborn as sns  # noqa: E402
+from scipy import stats  # noqa: E402
 
 from indusense import config  # noqa: E402
 from indusense.data.anonymize import anonymize_operators  # noqa: E402
@@ -46,8 +49,8 @@ CONFIDENCE_WEIGHTS = {
 
 # --- Chargement -------------------------------------------------------------
 def load_incidents_raw() -> pd.DataFrame:
-    """Charge les incidents bruts (CSV en encodage cp1252 — accents français)."""
-    return pd.read_csv(config.RAW_INCIDENTS, encoding="cp1252")
+    """Charge les incidents bruts (CSV en UTF-8 — cf. octets `c3 a9` pour « é »)."""
+    return pd.read_csv(config.RAW_INCIDENTS, encoding="utf-8")
 
 
 # --- Enrichissement ---------------------------------------------------------
@@ -112,6 +115,66 @@ def compute_metrics(df: pd.DataFrame) -> dict:
         "n_nan_total": int(nan_par_colonne.sum()),
         "n_nan_par_colonne": {k: int(v) for k, v in nan_par_colonne.items() if v > 0},
         "confidence_moyenne": round(float(df["confidence"].mean()), 3),
+    }
+
+
+# --- Association sévérité ↔ type de panne -----------------------------------
+def severity_type_association(df: pd.DataFrame) -> dict:
+    """Mesure l'association entre la **sévérité** (ordinale) et le **type de panne** (nominal).
+
+    Le type étant **nominal** et **multi-étiquette** (un incident peut porter plusieurs
+    signaux), Pearson/Spearman ne s'appliquent pas. On raisonne sur le format *long*
+    (une ligne par couple incident × signal actif) avec les tests adaptés :
+
+    - **χ² d'indépendance** + **V de Cramér** (corrigé du biais, *Bergsma 2013*) : force du
+      lien entre les deux variables catégorielles. Les sévérités rares (3/4/5) sont
+      regroupées en « 3+ » pour préserver la validité du χ² (effectifs théoriques ≥ 5) ;
+    - **Kruskal-Wallis** + **ε²** (taille d'effet) : la distribution *ordinale* de sévérité
+      diffère-t-elle selon le type ? Test robuste, sans hypothèse de normalité.
+
+    Retourne un dict : tableau sévérité/type, table de contingence et statistiques.
+    """
+    signals = list(config.INCIDENT_SIGNALS)
+    long = df.melt(id_vars=["severity"], value_vars=signals,
+                   var_name="type_panne", value_name="present")
+    long = long[long["present"] == 1].copy()
+    long["type_panne"] = long["type_panne"].str.replace("type_", "", regex=False)
+
+    sev_par_type = (
+        long.groupby("type_panne")["severity"]
+        .agg(["count", "mean", "std"])
+        .sort_values("mean", ascending=False)
+    )
+
+    # χ² + V de Cramér sur la contingence (sévérités 3/4/5 regroupées en « 3+ »).
+    sev_grp = long["severity"].clip(upper=3)
+    contingence = pd.crosstab(long["type_panne"], sev_grp)
+    chi2, p_chi2, dof, expected = stats.chi2_contingency(contingence)
+    n = int(contingence.values.sum())
+    r, c = contingence.shape
+    phi2_corr = max(0.0, chi2 / n - (c - 1) * (r - 1) / (n - 1))
+    r_corr = r - (r - 1) ** 2 / (n - 1)
+    c_corr = c - (c - 1) ** 2 / (n - 1)
+    cramers_v = float(np.sqrt(phi2_corr / max(1e-12, min(r_corr - 1, c_corr - 1))))
+
+    # Kruskal-Wallis (sévérité continue ~ type) + ε² (taille d'effet).
+    groups = [g["severity"].to_numpy() for _, g in long.groupby("type_panne")]
+    k = len(groups)
+    H, p_kruskal = stats.kruskal(*groups)
+    epsilon2 = float((H - k + 1) / (len(long) - k))
+
+    return {
+        "n_couples": int(len(long)),
+        "sev_par_type": sev_par_type,
+        "contingence": contingence,
+        "chi2": float(chi2),
+        "dof": int(dof),
+        "p_chi2": float(p_chi2),
+        "cramers_v": cramers_v,
+        "cellules_exp_faibles": int((expected < 5).sum()),
+        "kruskal_H": float(H),
+        "p_kruskal": float(p_kruskal),
+        "epsilon2": epsilon2,
     }
 
 
@@ -238,6 +301,41 @@ def make_figures(df: pd.DataFrame, out_dir: Path) -> list[str]:
           "Mesure : corrélation de Spearman (sur les rangs) entre les 9 signaux et la "
           "sévérité. Capte les liens monotones, y compris non linéaires ; robuste aux outliers.")
 
+    # 9 & 10. Association sévérité ↔ type de panne (variable nominale -> χ²/Kruskal)
+    assoc = severity_type_association(df)
+    sev_t = assoc["sev_par_type"]
+    moy_globale = float(df["severity"].mean())
+
+    # 9. Sévérité moyenne par type de panne
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.barh(range(len(sev_t)), sev_t["mean"].to_numpy(), color="#DD8452")
+    ax.set_yticks(range(len(sev_t)))
+    ax.set_yticklabels(sev_t.index, fontsize=8)
+    ax.invert_yaxis()  # type le plus sévère en haut
+    ax.axvline(moy_globale, color="#444444", ls="--", lw=1,
+               label=f"moyenne globale ({moy_globale:.2f})")
+    for i, (m, eff) in enumerate(zip(sev_t["mean"], sev_t["count"], strict=True)):
+        ax.text(m + 0.03, i, f"{m:.2f} (n={int(eff)})", va="center", fontsize=7.5)
+    ax.set(title="Sévérité moyenne par type de panne", xlabel="Sévérité moyenne (1–5)")
+    ax.set_xlim(0, max(sev_t["mean"]) * 1.18)
+    ax.legend(loc="lower right", fontsize=8)
+    _save(fig, "severite_moyenne_par_type.svg",
+          f"Mesure : sévérité moyenne (1–5) par type de panne (multi-étiquette, "
+          f"{assoc['n_couples']} couples). Kruskal-Wallis p={assoc['p_kruskal']:.1e}, "
+          f"ε²={assoc['epsilon2']:.3f} : le type influence la sévérité, mais faiblement.")
+
+    # 10. Table de contingence type × sévérité (3+ regroupé)
+    ct = assoc["contingence"]
+    fig, ax = plt.subplots(figsize=(7, 6))
+    sns.heatmap(ct, cmap="Reds", annot=True, fmt="d", square=False,
+                cbar_kws={"shrink": 0.8}, ax=ax, annot_kws={"size": 8})
+    ax.set(title="Contingence type de panne × sévérité",
+           xlabel="Sévérité (1 / 2 / 3+)", ylabel="Type de panne")
+    _save(fig, "contingence_type_severite.svg",
+          f"Mesure : effectifs croisés type × sévérité (3/4/5 regroupés en « 3+ »). "
+          f"χ²({assoc['dof']})={assoc['chi2']:.0f}, p={assoc['p_chi2']:.1e} (lien réel) ; "
+          f"V de Cramér={assoc['cramers_v']:.2f} = association faible à modérée.")
+
     return files
 
 
@@ -350,6 +448,23 @@ signal, **aucune contradiction**). Cas particulier : `type_arret_urgence` n'appa
 - **Feature engineering** : `comment` est une **redondance** des flags (colinéarité
   parfaite). À **exclure des features ML** — l'utiliser serait un **data leakage**
   (le commentaire *est* l'étiquette de la panne).
+
+## Corrélation sévérité ↔ type de panne (choix des tests)
+La sévérité est **ordinale** (1–5) et le type de panne **nominal** (9 catégories,
+multi-étiquette) : Pearson/Spearman ne s'appliquent pas à une variable nominale. On
+utilise donc, sur le format *long* (1 ligne par couple incident × signal actif) :
+
+| Test | Mesure | Lecture |
+|---|---|---|
+| χ² d'indépendance | significativité | le lien est-il dû au hasard ? |
+| V de Cramér (corrigé du biais) | taille d'effet ∈ [0, 1] | intensité de l'association |
+| Kruskal-Wallis + ε² | distribution ordinale par groupe | la sévérité dépend-elle du type ? |
+
+Les sévérités rares (3/4/5) sont regroupées en « 3+ » pour garantir la validité du χ²
+(effectifs théoriques ≥ 5). **Résultat** : association **statistiquement significative
+mais faible à modérée** (V de Cramér ≈ 0,24) — portée surtout par `arret_urgence` (quasi
+toujours critique), puis `surchauffe` / `blocage_mecanique`. Le type **seul** ne suffit
+pas à prédire la sévérité : la télémétrie restera nécessaire.
 """
     (config.INGEST_INCIDENTS_DIR / "METHODOLOGIE.md").write_text(content, encoding="utf-8")
 
@@ -368,6 +483,10 @@ def run_ingestion(now: datetime | None = None) -> dict:
 
     parquet_path = run_dir / "incidents_anonymized.parquet"
     df.to_parquet(parquet_path, index=False)
+    # Export CSV des données retenues (dataset anonymisé + enrichi), pour relecture
+    # humaine / Excel. Encodage utf-8-sig : accents français lisibles sous Excel Windows.
+    csv_path = run_dir / "incidents_anonymized.csv"
+    df.to_csv(csv_path, index=False, encoding="utf-8-sig")
     figures = make_figures(df, fig_dir)
 
     metrics = compute_metrics(df)
@@ -376,6 +495,7 @@ def run_ingestion(now: datetime | None = None) -> dict:
         "timestamp": now.isoformat(timespec="seconds"),
         "source": str(config.RAW_INCIDENTS),
         "dataset": str(parquet_path),
+        "dataset_csv": str(csv_path),
         "figures": figures,
         "colonnes": list(df.columns),
         **metrics,

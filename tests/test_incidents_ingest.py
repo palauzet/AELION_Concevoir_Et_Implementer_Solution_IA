@@ -49,6 +49,18 @@ def test_confidence_bounds_and_columns() -> None:
     assert df.loc[1, "confidence"] < 1.0
 
 
+def test_severity_type_association() -> None:
+    df = ing.enrich(anonymize_operators(_sample()))
+    assoc = ing.severity_type_association(df)
+    # 2 incidents -> 3 couples (INC-2 porte 2 signaux : surchauffe + vibration).
+    assert assoc["n_couples"] == 3
+    assert set(assoc["sev_par_type"].index) == {"surchauffe", "vibration"}
+    # Statistiques bien bornées.
+    assert 0.0 <= assoc["cramers_v"] <= 1.0
+    assert 0.0 <= assoc["p_chi2"] <= 1.0
+    assert 0.0 <= assoc["p_kruskal"] <= 1.0
+
+
 def test_run_ingestion_smoke(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(config, "INGEST_INCIDENTS_DIR", tmp_path)
     meta = ing.run_ingestion()
@@ -58,8 +70,20 @@ def test_run_ingestion_smoke(tmp_path, monkeypatch) -> None:
     df = pd.read_parquet(run_dir / "incidents_anonymized.parquet")
     assert "operator_name" not in df.columns
     assert len(df) == meta["n_lignes"]
+
+    # Export CSV des données retenues : même contenu que le parquet.
+    csv_path = run_dir / "incidents_anonymized.csv"
+    assert csv_path.exists()
+    df_csv = pd.read_csv(csv_path, encoding="utf-8-sig")
+    assert "operator_name" not in df_csv.columns
+    assert len(df_csv) == meta["n_lignes"]
+    assert list(df_csv.columns) == list(df.columns)
+    # Anti-régression encodage : accents propres (« mécanique »), pas de mojibake.
+    comments = df_csv["comment"].dropna()
+    assert comments.str.contains("mécanique").any()
+    assert not comments.str.contains("Ã").any()
     assert (run_dir / "figures").is_dir()
-    assert len(list((run_dir / "figures").glob("*.svg"))) == 8
+    assert len(list((run_dir / "figures").glob("*.svg"))) == 10
 
     runs = json.loads((tmp_path / "runs.json").read_text(encoding="utf-8"))
     assert runs[-1]["run_id"] == meta["run_id"]
