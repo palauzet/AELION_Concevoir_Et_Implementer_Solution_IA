@@ -6,7 +6,7 @@ enrichi** versionné (dossier horodaté), les graphes d'analyse et un journal de
 
 Prérequis : ``indusense-ingest`` a alimenté ``bronze.incident``.
 
-Sorties (sous ``config.INGEST_INCIDENTS_DIR``) :
+Sorties (sous ``config.ANALYSE_INCIDENTS_DIR``) :
 
 - ``runs.json`` / ``runs.md`` : journal des runs (lignes, colonnes, machines, NaN).
 - ``METHODOLOGIE.md`` : justification anonymisation + définition de l'indice de confiance.
@@ -446,12 +446,12 @@ def make_figures(df: pd.DataFrame, out_dir: Path) -> list[str]:
 
 # --- Journal des runs -------------------------------------------------------
 def _runs_json_path() -> Path:
-    return config.INGEST_INCIDENTS_DIR / "runs.json"
+    return config.ANALYSE_INCIDENTS_DIR / "runs.json"
 
 
 def _render_runs_md(runs: list[dict]) -> str:
     header = (
-        "# Journal des runs — ingestion incidents\n\n"
+        "# Journal des runs — analyse incidents\n\n"
         "| Run (AAAAMMJJHHMM) | Lignes | Colonnes | Machines | NaN | Confiance moy. |\n"
         "|---|---:|---:|---:|---:|---:|\n"
     )
@@ -465,7 +465,7 @@ def _render_runs_md(runs: list[dict]) -> str:
 
 def append_run(meta: dict) -> None:
     """Ajoute le run au journal JSON et régénère la vue Markdown."""
-    config.INGEST_INCIDENTS_DIR.mkdir(parents=True, exist_ok=True)
+    config.ANALYSE_INCIDENTS_DIR.mkdir(parents=True, exist_ok=True)
     path = _runs_json_path()
     runs = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
     entry = {
@@ -481,12 +481,12 @@ def append_run(meta: dict) -> None:
     }
     runs.append(entry)
     path.write_text(json.dumps(runs, indent=2, ensure_ascii=False), encoding="utf-8")
-    (config.INGEST_INCIDENTS_DIR / "runs.md").write_text(_render_runs_md(runs), encoding="utf-8")
+    (config.ANALYSE_INCIDENTS_DIR / "runs.md").write_text(_render_runs_md(runs), encoding="utf-8")
 
 
 def write_methodologie() -> None:
     """Écrit (ou rafraîchit) la note de méthodologie au niveau du dossier incidents."""
-    config.INGEST_INCIDENTS_DIR.mkdir(parents=True, exist_ok=True)
+    config.ANALYSE_INCIDENTS_DIR.mkdir(parents=True, exist_ok=True)
     weights = " + ".join(f"{w}·{c}" for c, w in CONFIDENCE_WEIGHTS.items())
     content = f"""# Méthodologie — ingestion des incidents
 
@@ -586,7 +586,7 @@ La contingence machine × type (15 × 9) comporte des cellules à effectif théo
 de pannes ou une gravité particulière. Pas de ciblage maintenance machine par machine
 justifié à ce stade.
 """
-    (config.INGEST_INCIDENTS_DIR / "METHODOLOGIE.md").write_text(content, encoding="utf-8")
+    (config.ANALYSE_INCIDENTS_DIR / "METHODOLOGIE.md").write_text(content, encoding="utf-8")
 
 
 # --- Orchestration ----------------------------------------------------------
@@ -594,7 +594,7 @@ def run_ingestion(now: datetime | None = None) -> dict:
     """Exécute le pipeline complet et retourne les métadonnées du run."""
     now = now or datetime.now()
     run_id = now.strftime(config.RUN_TS_FORMAT)
-    run_dir = config.INGEST_INCIDENTS_DIR / run_id
+    run_dir = config.ANALYSE_INCIDENTS_DIR / run_id
     fig_dir = run_dir / "figures"
     run_dir.mkdir(parents=True, exist_ok=True)
 

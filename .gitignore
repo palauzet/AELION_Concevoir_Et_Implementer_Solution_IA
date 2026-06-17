@@ -17,7 +17,7 @@ data/processed/
 
 # Artefacts générés (run versionné par dossier horodaté ; DVC au Sprint 3).
 # Le journal (runs.json/runs.md) et METHODOLOGIE.md restent versionnés.
-artifacts/ingestions/incidents/*/
+artifacts/analyses/incidents/*/
 artifacts/analyses/telemetry/*/
 artifacts/analyses/referentiel/*/
 

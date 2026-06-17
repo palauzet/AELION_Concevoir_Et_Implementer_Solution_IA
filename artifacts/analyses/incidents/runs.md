@@ -1,4 +1,4 @@
-# Journal des runs — ingestion incidents
+# Journal des runs — analyse incidents
 
 | Run (AAAAMMJJHHMM) | Lignes | Colonnes | Machines | NaN | Confiance moy. |
 |---|---:|---:|---:|---:|---:|
@@ -21,3 +21,5 @@
 | 202606171554 | 900 | 27 | 15 | 59 | 0.984 |
 | 202606171607 | 900 | 27 | 15 | 59 | 0.984 |
 | 202606171610 | 900 | 27 | 15 | 59 | 0.984 |
+| 202606171638 | 900 | 27 | 15 | 59 | 0.984 |
+| 202606171639 | 900 | 27 | 15 | 59 | 0.984 |

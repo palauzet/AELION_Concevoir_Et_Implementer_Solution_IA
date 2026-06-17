@@ -40,7 +40,7 @@ GOLD_DATASET = DATA_PROCESSED / "gold_dataset.parquet"
 
 # --- Artefacts d'ingestion (runs horodatés, versionnés) ---------------------
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
-INGEST_INCIDENTS_DIR = ARTIFACTS_DIR / "ingestions" / "incidents"
+ANALYSE_INCIDENTS_DIR = ARTIFACTS_DIR / "analyses" / "incidents"
 ANALYSE_TELEMETRY_DIR = ARTIFACTS_DIR / "analyses" / "telemetry"
 ANALYSE_REFERENTIEL_DIR = ARTIFACTS_DIR / "analyses" / "referentiel"
 RUN_TS_FORMAT = "%Y%m%d%H%M"  # dossier de run : AAAAMMJJHHMM
