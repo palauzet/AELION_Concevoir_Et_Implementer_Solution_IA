@@ -1,8 +1,9 @@
-# Dictionnaire des données — `AELION_SPRINT01`
+# Dictionnaire des données — `indusense_db`
 
-> Extrait le 2026-06-16 depuis le serveur SQL Server local.
-> Base : **`AELION_SPRINT01`** · Schéma : **`bronze`** (couche de données brutes / ingestion).
-> Source : `sys.tables`, `sys.columns`, `sys.foreign_keys`, `sys.indexes`.
+> Extrait initial le 2026-06-16 (instance SQL Server, avant migration).
+> Base : **`indusense_db`** (PostgreSQL) · Schéma : **`bronze`** (données brutes / ingestion).
+> Source : `information_schema` / `pg_catalog`.
+> ⚠️ À régénérer contre PostgreSQL : certains types peuvent différer (ex. `timestamptz`).
 
 ## Vue d'ensemble
 

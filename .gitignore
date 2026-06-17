@@ -40,3 +40,6 @@ desktop.ini
 
 # Exports de notebooks (rendus générés)
 notebooks/*.html
+
+# Archives sources du kit docker (le dossier extrait est versionné)
+docker/*.zip

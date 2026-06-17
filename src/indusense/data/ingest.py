@@ -5,7 +5,7 @@ relancer l'import produit toujours le même état.
 
 Usage (une fois l'environnement uv prêt) :
 
-    uv run indusense-ingest --migrate            # transfère dbo->bronze + charge tout
+    uv run indusense-ingest --migrate            # charge machine.sql (réf.) + tous les CSV
     uv run indusense-ingest --source telemetry   # recharge seulement la télémétrie
     uv run indusense-ingest --source incidents
     uv run python -m indusense.data.ingest --help
@@ -50,49 +50,27 @@ SOURCES: dict[str, CsvSource] = {
     ),
 }
 
-# Tables créées hors ORM (par machine.sql) à rapatrier dans bronze.
-DBO_TABLES_TO_MIGRATE = ("machine", "maintenance")
+def load_reference_data(engine: Engine) -> None:
+    """Charge les tables de référence (machine, maintenance) dans ``bronze``.
 
-
-def migrate_dbo_to_bronze(
-    engine: Engine, tables: tuple[str, ...] = DBO_TABLES_TO_MIGRATE
-) -> list[str]:
-    """Transfère les tables de ``dbo`` vers ``bronze`` (idempotent).
-
-    Ne fait rien si la table est déjà dans bronze ou absente de dbo.
+    Exécute le script PostgreSQL ``data/raw/machine.sql`` (CREATE TABLE + seed,
+    idempotent via ``ON CONFLICT``) en positionnant ``search_path`` sur ``bronze``
+    pour que les tables non qualifiées y soient créées. Le script gère sa propre
+    transaction (``BEGIN``/``COMMIT``), d'où l'exécution en isolation AUTOCOMMIT.
     """
-    moved: list[str] = []
-    bronze = config.SCHEMA_BRONZE
-    bronze_ident = bronze.replace("]", "]]")
-    check = text(
-        "SELECT 1 FROM sys.tables t JOIN sys.schemas s ON t.schema_id = s.schema_id "
-        "WHERE s.name = :b AND t.name = :t"
-    )
-    with engine.begin() as conn:
-        for t in tables:
-            # Noms issus de DBO_TABLES_TO_MIGRATE (constante) : insérés en littéral.
-            t_ident = t.replace("]", "]]")
-            t_lit = t.replace("'", "''")
-            bronze_lit = bronze.replace("'", "''")
-            stmt = text(
-                "IF EXISTS (SELECT 1 FROM sys.tables tt "
-                "JOIN sys.schemas s ON tt.schema_id = s.schema_id "
-                f"          WHERE s.name = 'dbo' AND tt.name = N'{t_lit}') "
-                "AND NOT EXISTS (SELECT 1 FROM sys.tables tt "
-                "JOIN sys.schemas s ON tt.schema_id = s.schema_id "
-                f"               WHERE s.name = N'{bronze_lit}' AND tt.name = N'{t_lit}') "
-                f"ALTER SCHEMA [{bronze_ident}] TRANSFER [dbo].[{t_ident}]"
-            )
-            conn.execute(stmt)
-            if conn.execute(check, {"t": t, "b": bronze}).first():
-                moved.append(t)
-    return moved
+    script = config.RAW_MACHINE_SQL.read_text(encoding="utf-8")
+    ident = config.SCHEMA_BRONZE.replace('"', '""')
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+        conn.exec_driver_sql(f'SET search_path TO "{ident}", public')
+        conn.exec_driver_sql(script)
 
 
 def _truncate(engine: Engine, table: str) -> None:
-    fq = f"[{config.SCHEMA_BRONZE}].[{table}]"
+    ident_schema = config.SCHEMA_BRONZE.replace('"', '""')
+    ident_table = table.replace('"', '""')
+    fq = f'"{ident_schema}"."{ident_table}"'
     with engine.begin() as conn:
-        conn.execute(text(f"TRUNCATE TABLE {fq}"))
+        conn.execute(text(f"TRUNCATE TABLE {fq} RESTART IDENTITY"))
 
 
 def load_csv_to_bronze(
@@ -127,12 +105,11 @@ def load_csv_to_bronze(
 
 
 def setup_bronze(engine: Engine, migrate: bool = False) -> None:
-    """Prépare le schéma bronze : schéma, migration dbo, puis tables ORM."""
+    """Prépare le schéma bronze : schéma, données de référence, puis tables ORM."""
     ensure_schema(engine, config.SCHEMA_BRONZE)
     if migrate:
-        moved = migrate_dbo_to_bronze(engine)
-        if moved:
-            print(f"Migration dbo -> bronze : {', '.join(moved)}")
+        load_reference_data(engine)
+        print("Données de référence (machine, maintenance) chargées dans bronze.")
     # Importe les modèles pour les enregistrer sur Base.metadata, puis crée
     # les tables manquantes (telemetry, incident ; machine/maintenance déjà là).
     from indusense.data import models  # noqa: F401
@@ -142,7 +119,7 @@ def setup_bronze(engine: Engine, migrate: bool = False) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
-        description="Ingestion CSV -> schéma bronze (AELION_SPRINT01)."
+        description="Ingestion CSV -> schéma bronze (PostgreSQL)."
     )
     parser.add_argument(
         "--source",
@@ -153,7 +130,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--migrate",
         action="store_true",
-        help="Transférer dbo.machine / dbo.maintenance vers bronze avant chargement.",
+        help="Charger les données de référence (machine, maintenance) depuis machine.sql.",
     )
     parser.add_argument(
         "--no-truncate",

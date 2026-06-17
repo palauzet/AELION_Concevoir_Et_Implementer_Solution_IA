@@ -1,6 +1,6 @@
-"""Connexion SQL Server + gestion des schémas médaillon (US 1.2, C1/C3).
+"""Connexion PostgreSQL + gestion des schémas médaillon (US 1.2, C1/C3).
 
-Auth Windows intégrée vers l'instance locale (cf. ``config.DB_URL``).
+Cible l'instance du conteneur Docker fourni (cf. ``config.DB_URL``, driver psycopg 3).
 """
 
 from __future__ import annotations
@@ -17,11 +17,8 @@ class Base(DeclarativeBase):
 
 
 def get_engine(echo: bool = False) -> Engine:
-    """Engine SQLAlchemy vers AELION_SPRINT01.
-
-    ``fast_executemany`` accélère fortement les inserts en masse (pyodbc).
-    """
-    return create_engine(config.DB_URL, echo=echo, fast_executemany=True)
+    """Engine SQLAlchemy vers la base PostgreSQL du projet."""
+    return create_engine(config.DB_URL, echo=echo)
 
 
 SessionLocal = sessionmaker()
@@ -30,18 +27,13 @@ SessionLocal = sessionmaker()
 def ensure_schema(engine: Engine, schema: str) -> None:
     """Crée le schéma s'il n'existe pas (idempotent).
 
-    Le nom de schéma provient de constantes internes ; il est inséré en
-    littéral (CREATE SCHEMA doit être seul dans son batch, d'où l'EXEC) avec
-    échappement défensif des crochets et apostrophes.
+    Le nom de schéma provient de constantes internes ; il est inséré en littéral
+    (``CREATE SCHEMA`` n'accepte pas de paramètre lié) avec échappement défensif
+    des guillemets doubles.
     """
-    ident = schema.replace("]", "]]")
-    literal = schema.replace("'", "''")
-    stmt = text(
-        f"IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = N'{literal}') "
-        f"EXEC('CREATE SCHEMA [{ident}]')"
-    )
+    ident = schema.replace('"', '""')
     with engine.begin() as conn:
-        conn.execute(stmt)
+        conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{ident}"'))
 
 
 def create_bronze_schema_and_tables(engine: Engine) -> None:

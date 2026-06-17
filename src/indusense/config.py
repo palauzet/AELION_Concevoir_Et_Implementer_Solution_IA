@@ -1,17 +1,22 @@
-"""Chemins, connexion SQL Server et constantes du projet.
+"""Chemins, connexion PostgreSQL et constantes du projet.
 
 Les artefacts bruts fournis (kit de départ) restent à la racine du projet.
 La donnée est organisée en architecture *médaillon* : schéma ``bronze`` pour
 la donnée brute fidèle à la source (silver / gold viendront aux US suivantes).
+
+La base cible est l'instance PostgreSQL du conteneur Docker fourni par le
+formateur (``docker/pgdocker``). Les identifiants ci-dessous reprennent ceux du
+``docker-compose`` ; surcharge possible via les variables ``INDUSENSE_PG_*`` ou
+une URL complète ``INDUSENSE_DB_URL``.
 """
 
 from __future__ import annotations
 
 import os
-import urllib.parse
 from pathlib import Path
 
 from dotenv import load_dotenv
+from sqlalchemy import URL
 
 load_dotenv()
 
@@ -51,29 +56,27 @@ INCIDENT_SIGNALS = (
     "type_defaut_qualite",
 )
 
-# --- SQL Server -------------------------------------------------------------
-SQL_SERVER = os.getenv("INDUSENSE_SQL_SERVER", "XANADU-PC03")
-SQL_DATABASE = os.getenv("INDUSENSE_SQL_DATABASE", "AELION_SPRINT01")
-ODBC_DRIVER = os.getenv("INDUSENSE_ODBC_DRIVER", "ODBC Driver 17 for SQL Server")
+# --- PostgreSQL -------------------------------------------------------------
+# Valeurs par défaut alignées sur docker/pgdocker/.env (conteneur du formateur).
+PG_HOST = os.getenv("INDUSENSE_PG_HOST", "localhost")
+PG_PORT = int(os.getenv("INDUSENSE_PG_PORT", "5432"))
+PG_DATABASE = os.getenv("INDUSENSE_PG_DATABASE", "indusense_db")
+PG_USER = os.getenv("INDUSENSE_PG_USER", "indusense_user")
+# Pas de secret en dur : le mot de passe doit venir de .env (gitignoré) ou de l'env.
+PG_PASSWORD = os.getenv("INDUSENSE_PG_PASSWORD", "")
 
 # Schémas de l'architecture médaillon.
 SCHEMA_BRONZE = "bronze"
 SCHEMA_SILVER = "silver"
 SCHEMA_GOLD = "gold"
 
-
-def _odbc_connect_string() -> str:
-    return (
-        f"DRIVER={{{ODBC_DRIVER}}};"
-        f"SERVER={SQL_SERVER};"
-        f"DATABASE={SQL_DATABASE};"
-        "Trusted_Connection=yes;"
-        "TrustServerCertificate=yes"
-    )
-
-
-# URL SQLAlchemy (auth Windows intégrée). Surchargeable via INDUSENSE_DB_URL.
-DB_URL = os.getenv(
-    "INDUSENSE_DB_URL",
-    "mssql+pyodbc:///?odbc_connect=" + urllib.parse.quote_plus(_odbc_connect_string()),
+# URL SQLAlchemy (driver psycopg 3). ``URL.create`` gère l'échappement du mot de
+# passe (caractères spéciaux comme « @ »). Surchargeable via INDUSENSE_DB_URL.
+DB_URL: str | URL = os.getenv("INDUSENSE_DB_URL") or URL.create(
+    "postgresql+psycopg",
+    username=PG_USER,
+    password=PG_PASSWORD,
+    host=PG_HOST,
+    port=PG_PORT,
+    database=PG_DATABASE,
 )

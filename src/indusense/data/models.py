@@ -4,16 +4,18 @@ Principe *bronze* = fidélité à la source, tolérance aux données « sales »
 colonnes majoritairement nullables, pas de contrainte d'intégrité forte
 (le nettoyage et les FK arrivent en couche *silver*, US 1.3+).
 
-- ``machine`` / ``maintenance`` : déjà créées par ``machine.sql`` (dans ``dbo``),
-  migrées vers ``bronze`` (cf. ``ingest.migrate_dbo_to_bronze``). Les modèles
-  ci-dessous les reflètent pour interrogation.
+- ``machine`` / ``maintenance`` : créées et alimentées dans ``bronze`` par
+  ``machine.sql`` (cf. ``ingest.load_reference_data``). Les modèles ci-dessous
+  les reflètent pour interrogation.
 - ``telemetry`` / ``incident`` : alimentées depuis les CSV par le script d'import.
+
+``DateTime(timezone=True)`` se traduit en ``TIMESTAMPTZ`` sous PostgreSQL, en
+cohérence avec ``machine.sql`` ; ``DateTime`` (sans tz) en ``timestamp``.
 """
 
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Date, Integer, Numeric, String
-from sqlalchemy.dialects.mssql import DATETIME2, DATETIMEOFFSET
+from sqlalchemy import Boolean, Date, DateTime, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from indusense.config import SCHEMA_BRONZE
@@ -33,8 +35,8 @@ class Machine(Base):
     location: Mapped[str] = mapped_column(String(16))
     criticality: Mapped[str] = mapped_column(String(8))
     is_active: Mapped[bool] = mapped_column(Boolean)
-    created_at: Mapped[object] = mapped_column(DATETIMEOFFSET)
-    updated_at: Mapped[object] = mapped_column(DATETIMEOFFSET)
+    created_at: Mapped[object] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[object] = mapped_column(DateTime(timezone=True))
 
 
 class Maintenance(Base):
@@ -43,15 +45,15 @@ class Maintenance(Base):
 
     maintenance_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
     machine_code: Mapped[str] = mapped_column(String(16))
-    maintenance_at: Mapped[object] = mapped_column(DATETIMEOFFSET)
+    maintenance_at: Mapped[object] = mapped_column(DateTime(timezone=True))
     maintenance_type: Mapped[str] = mapped_column(String(16))
     action_type: Mapped[str] = mapped_column(String(32))
     component: Mapped[str] = mapped_column(String(64))
     description: Mapped[str] = mapped_column(String)
     related_incident_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
     duration_hours: Mapped[object] = mapped_column(Numeric(6, 2))
-    created_at: Mapped[object] = mapped_column(DATETIMEOFFSET)
-    updated_at: Mapped[object] = mapped_column(DATETIMEOFFSET)
+    created_at: Mapped[object] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[object] = mapped_column(DateTime(timezone=True))
 
 
 class Telemetry(Base):
@@ -62,7 +64,7 @@ class Telemetry(Base):
 
     telemetry_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     machine_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    timestamp: Mapped[object] = mapped_column(DATETIME2, nullable=True)
+    timestamp: Mapped[object] = mapped_column(DateTime, nullable=True)
     temperature_c: Mapped[float | None] = mapped_column(nullable=True)
     pressure_bar: Mapped[float | None] = mapped_column(nullable=True)
     voltage_mean_v: Mapped[float | None] = mapped_column(nullable=True)
