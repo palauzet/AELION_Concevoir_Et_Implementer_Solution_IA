@@ -19,6 +19,7 @@ data/processed/
 # Le journal (runs.json/runs.md) et METHODOLOGIE.md restent versionnés.
 artifacts/ingestions/incidents/*/
 artifacts/analyses/telemetry/*/
+artifacts/analyses/referentiel/*/
 
 # Notebooks
 .ipynb_checkpoints/

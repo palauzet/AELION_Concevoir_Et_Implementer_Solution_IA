@@ -1,0 +1,46 @@
+[
+  {
+    "run_id": "202606171534",
+    "timestamp": "2026-06-17T15:34:40",
+    "source": "bronze.machine + bronze.maintenance (dump machine.sql)",
+    "n_machines": 15,
+    "n_maintenances": 115,
+    "n_modeles": 4,
+    "n_proactive": 90,
+    "n_reactive": 25,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\referentiel\\202606171534"
+  },
+  {
+    "run_id": "202606171535",
+    "timestamp": "2026-06-17T15:35:50",
+    "source": "bronze.machine + bronze.maintenance (dump machine.sql)",
+    "n_machines": 15,
+    "n_maintenances": 115,
+    "n_modeles": 4,
+    "n_proactive": 90,
+    "n_reactive": 25,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\referentiel\\202606171535"
+  },
+  {
+    "run_id": "202606171542",
+    "timestamp": "2026-06-17T15:42:49",
+    "source": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\data\\raw\\machine.sql",
+    "n_machines": 15,
+    "n_maintenances": 115,
+    "n_modeles": 4,
+    "n_proactive": 90,
+    "n_reactive": 25,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\referentiel\\202606171542"
+  },
+  {
+    "run_id": "202606171543",
+    "timestamp": "2026-06-17T15:43:39",
+    "source": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\data\\raw\\machine.sql",
+    "n_machines": 15,
+    "n_maintenances": 115,
+    "n_modeles": 4,
+    "n_proactive": 90,
+    "n_reactive": 25,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\referentiel\\202606171543"
+  }
+]

@@ -42,6 +42,7 @@ GOLD_DATASET = DATA_PROCESSED / "gold_dataset.parquet"
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 INGEST_INCIDENTS_DIR = ARTIFACTS_DIR / "ingestions" / "incidents"
 ANALYSE_TELEMETRY_DIR = ARTIFACTS_DIR / "analyses" / "telemetry"
+ANALYSE_REFERENTIEL_DIR = ARTIFACTS_DIR / "analyses" / "referentiel"
 RUN_TS_FORMAT = "%Y%m%d%H%M"  # dossier de run : AAAAMMJJHHMM
 
 # Mesures capteurs de la télémétrie (ordre stable pour les figures/corrélations).

@@ -26,6 +26,7 @@ dependencies = [
 indusense-ingest = "indusense.data.ingest:main"
 indusense-incidents = "indusense.data.incidents_ingest:main"
 indusense-telemetry = "indusense.data.telemetry_analyze:main"
+indusense-referentiel = "indusense.data.referentiel_analyze:main"
 
 [dependency-groups]
 # Outillage de dev — installé via `uv sync` (groupe activé par défaut).
