@@ -1,11 +1,12 @@
 """Analyse du référentiel machines & maintenance (US 1.x, C1/C2).
 
-Le référentiel provient du **dump SQL fourni** (``data/raw/machine.sql``, tables
-``machine`` et ``maintenance``). Ce pipeline **parse directement le dump** (sans
-dépendance à une base), vérifie son intégrité, puis produit une analyse statistique
-(parc machines + activité de maintenance), des graphes versionnés et un journal de runs.
+Le référentiel provient du **dump SQL fourni** (``data/raw/machine.sql``), chargé dans
+``bronze.machine`` / ``bronze.maintenance`` par ``indusense-ingest --migrate``. Ce pipeline
+lit la **couche bronze** (médaillon, source unique de vérité), vérifie son intégrité, puis
+produit une analyse statistique (parc machines + activité de maintenance), des graphes
+versionnés et un journal de runs.
 
-Pipeline autonome, comme ceux de la télémétrie et des incidents (lecture du brut fourni).
+Prérequis : ``indusense-ingest --migrate`` a alimenté ``bronze.machine`` / ``maintenance``.
 
 Sorties (sous ``config.ANALYSE_REFERENTIEL_DIR``) :
 
@@ -22,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 from datetime import datetime
 from pathlib import Path
 
@@ -35,89 +35,24 @@ import pandas as pd  # noqa: E402
 import seaborn as sns  # noqa: E402
 
 from indusense import config  # noqa: E402
+from indusense.data.db import read_bronze  # noqa: E402
 
 CRITICALITY_ORDER = ["LOW", "MEDIUM", "HIGH"]
 PII_PATTERNS = ("operator", "name", "nom", "badge", "email", "mail", "user", "agent")
 
 
-# --- Chargement (parsing direct du dump SQL fourni) -------------------------
-def _coerce(token: str) -> object:
-    """Convertit un littéral SQL en valeur Python (NULL, chaîne, entier, flottant)."""
-    t = token.strip()
-    if t.upper() == "NULL":
-        return None
-    if len(t) >= 2 and t.startswith("'") and t.endswith("'"):
-        return t[1:-1].replace("''", "'")  # déséchappe les quotes SQL doublées
-    if re.fullmatch(r"-?\d+", t):
-        return int(t)
-    if re.fullmatch(r"-?\d*\.\d+", t):
-        return float(t)
-    return t
-
-
-def _split_top_level(s: str, sep: str) -> list[str]:
-    """Découpe ``s`` sur ``sep`` au niveau 0 (hors parenthèses et chaînes quotées)."""
-    parts: list[str] = []
-    buf: list[str] = []
-    depth = 0
-    in_str = False
-    i = 0
-    while i < len(s):
-        ch = s[i]
-        if in_str:
-            if ch == "'" and i + 1 < len(s) and s[i + 1] == "'":
-                buf.append("''")
-                i += 2
-                continue
-            if ch == "'":
-                in_str = False
-            buf.append(ch)
-        elif ch == "'":
-            in_str = True
-            buf.append(ch)
-        elif ch == "(":
-            depth += 1
-            buf.append(ch)
-        elif ch == ")":
-            depth -= 1
-            buf.append(ch)
-        elif ch == sep and depth == 0:
-            parts.append("".join(buf))
-            buf = []
-        else:
-            buf.append(ch)
-        i += 1
-    if "".join(buf).strip():
-        parts.append("".join(buf))
-    return parts
-
-
-def _parse_insert(sql: str, table: str) -> pd.DataFrame:
-    """Parse les ``INSERT INTO {table} (...) VALUES (...), ...`` d'un dump PostgreSQL."""
-    m = re.search(rf"INSERT\s+INTO\s+{table}\s*\(([^)]*)\)\s*VALUES", sql, re.IGNORECASE)
-    if m is None:
-        raise ValueError(f"Aucun INSERT trouvé pour la table « {table} »")
-    cols = [c.strip() for c in m.group(1).split(",")]
-    rest = sql[m.end():]
-    stop = re.search(r"ON\s+CONFLICT|;", rest, re.IGNORECASE)
-    values_text = rest[: stop.start()] if stop else rest
-
-    rows = []
-    for tup in _split_top_level(values_text, ","):
-        tup = tup.strip()
-        if tup.startswith("(") and tup.endswith(")"):
-            rows.append([_coerce(f) for f in _split_top_level(tup[1:-1], ",")])
-    return pd.DataFrame(rows, columns=cols)
-
-
+# --- Chargement (depuis bronze, alimenté par le dump via indusense-ingest) --
 def load_referentiel() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Parse le **dump SQL brut** ``data/raw/machine.sql`` (tables machine & maintenance).
+    """Charge ``bronze.machine`` et ``bronze.maintenance`` (médaillon).
 
-    Lit la donnée *à la source* (le dump fourni), sans dépendance à une base : le
-    pipeline est autonome, comme ceux de la télémétrie et des incidents (lecture CSV).
+    Le dump ``data/raw/machine.sql`` est chargé dans bronze par ``indusense-ingest
+    --migrate`` ; l'analyse lit la couche gouvernée (source unique de vérité), pas le
+    dump. ``duration_hours`` (Numeric) est ramené en float pour les calculs.
     """
-    sql = config.RAW_MACHINE_SQL.read_text(encoding="utf-8")
-    return _parse_insert(sql, "machine"), _parse_insert(sql, "maintenance")
+    machine = read_bronze("machine")
+    maintenance = read_bronze("maintenance")
+    maintenance["duration_hours"] = maintenance["duration_hours"].astype(float)
+    return machine, maintenance
 
 
 # --- Intégrité (anonymisation N/A + cohérence référentielle) ----------------
@@ -378,13 +313,13 @@ def write_methodologie() -> None:
     config.ANALYSE_REFERENTIEL_DIR.mkdir(parents=True, exist_ok=True)
     content = """# Méthodologie — analyse du référentiel
 
-## Source : le dump SQL fourni, parsé directement
+## Source : la couche bronze (médaillon)
 Le référentiel provient du dump `data/raw/machine.sql` (tables `machine` et
-`maintenance`). L'analyse **parse directement les `INSERT` du dump** (`load_referentiel`)
-— donnée lue *à la source*, **sans dépendance à une base**. Le pipeline est ainsi
-autonome et reproductible, comme ceux de la télémétrie et des incidents (lecture du CSV
-brut). Le même dump alimente par ailleurs le schéma `bronze` via `indusense-ingest
---migrate` (chargement verbatim) : les deux vues portent la même donnée.
+`maintenance`), chargé dans `bronze` par `indusense-ingest --migrate`. L'analyse lit la
+**couche bronze** (`load_referentiel` → `SELECT … FROM bronze.*`), pas le dump : en
+architecture médaillon, le brut n'a qu'un seul lecteur (l'ingestion) et tout l'aval
+s'appuie sur la couche gouvernée — **source unique de vérité**, typage/encodage faits une
+seule fois, lignage centralisé.
 
 ## Anonymisation (RGPD) : non requise
 Le référentiel ne comporte **aucune donnée personnelle** : caractéristiques d'équipement
@@ -426,7 +361,7 @@ def run_analysis(now: datetime | None = None) -> dict:
     meta = {
         "run_id": run_id,
         "timestamp": now.isoformat(timespec="seconds"),
-        "source": str(config.RAW_MACHINE_SQL),
+        "source": "bronze.machine + bronze.maintenance",
         "integrite": integrity,
         "figures": figures,
         **metrics,

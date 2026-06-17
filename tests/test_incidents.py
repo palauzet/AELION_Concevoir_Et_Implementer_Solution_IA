@@ -74,6 +74,8 @@ def test_machine_association() -> None:
 
 def test_run_ingestion_smoke(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(config, "INGEST_INCIDENTS_DIR", tmp_path)
+    # Injecte le CSV brut comme stand-in de bronze (même donnée, sans dépendance DB).
+    monkeypatch.setattr(ing, "load_incidents", lambda: pd.read_csv(config.RAW_INCIDENTS))
     meta = ing.run_ingestion()
 
     run_dir = tmp_path / meta["run_id"]

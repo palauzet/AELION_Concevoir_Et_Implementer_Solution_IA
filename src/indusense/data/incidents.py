@@ -1,8 +1,10 @@
 """Ingestion & analyse des relevés d'incidents (US 1.1, C1/C2).
 
-Pipeline reproductible et tracé : à partir du CSV brut des incidents, produit un
-dataset **anonymisé + enrichi** versionné (dossier horodaté), les graphes d'analyse
-et un journal de suivi des runs.
+Pipeline reproductible et tracé : à partir de la table ``bronze.incident`` (médaillon ;
+le CSV brut y est chargé par ``indusense-ingest``), produit un dataset **anonymisé +
+enrichi** versionné (dossier horodaté), les graphes d'analyse et un journal de runs.
+
+Prérequis : ``indusense-ingest`` a alimenté ``bronze.incident``.
 
 Sorties (sous ``config.INGEST_INCIDENTS_DIR``) :
 
@@ -35,6 +37,7 @@ from scipy import stats  # noqa: E402
 
 from indusense import config  # noqa: E402
 from indusense.data.anonymize import anonymize_operators  # noqa: E402
+from indusense.data.db import read_bronze  # noqa: E402
 
 SHIFT_ORDER = ["matin", "apres-midi", "nuit"]
 
@@ -48,9 +51,13 @@ CONFIDENCE_WEIGHTS = {
 
 
 # --- Chargement -------------------------------------------------------------
-def load_incidents_raw() -> pd.DataFrame:
-    """Charge les incidents bruts (CSV en UTF-8 — cf. octets `c3 a9` pour « é »)."""
-    return pd.read_csv(config.RAW_INCIDENTS, encoding="utf-8")
+def load_incidents() -> pd.DataFrame:
+    """Charge les incidents depuis ``bronze.incident`` (médaillon).
+
+    Prérequis : ``indusense-ingest`` a chargé le CSV brut dans bronze. La clé technique
+    de surface ``incident_pk`` est écartée (non pertinente pour l'analyse).
+    """
+    return read_bronze("incident").drop(columns=["incident_pk"], errors="ignore")
 
 
 # --- Enrichissement ---------------------------------------------------------
@@ -591,7 +598,7 @@ def run_ingestion(now: datetime | None = None) -> dict:
     fig_dir = run_dir / "figures"
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    raw = load_incidents_raw()
+    raw = load_incidents()
     df = compute_confidence(enrich(anonymize_operators(raw)))
 
     parquet_path = run_dir / "incidents_anonymized.parquet"
@@ -606,7 +613,7 @@ def run_ingestion(now: datetime | None = None) -> dict:
     meta = {
         "run_id": run_id,
         "timestamp": now.isoformat(timespec="seconds"),
-        "source": str(config.RAW_INCIDENTS),
+        "source": "bronze.incident",
         "dataset": str(parquet_path),
         "dataset_csv": str(csv_path),
         "figures": figures,

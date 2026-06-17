@@ -65,8 +65,8 @@ def test_correlations_shape() -> None:
 
 def test_run_analysis_smoke(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(config, "ANALYSE_TELEMETRY_DIR", tmp_path)
-    # Échantillon (au lieu des 134k lignes réelles) : test rapide et isolé.
-    monkeypatch.setattr(tel, "load_telemetry_raw", lambda: _sample(48))
+    # Échantillon (au lieu de lire bronze) : test rapide et isolé.
+    monkeypatch.setattr(tel, "load_telemetry", lambda: _sample(48))
     meta = tel.run_analysis()
 
     run_dir = tmp_path / meta["run_id"]

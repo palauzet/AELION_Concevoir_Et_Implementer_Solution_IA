@@ -1,9 +1,11 @@
 """Analyse statistique de la télémétrie (US 1.x, C1/C2).
 
-Pipeline reproductible et tracé : à partir du CSV brut de télémétrie, vérifie
-l'absence de données personnelles, dédoublonne (garde idempotente), enrichit d'axes
-temporels, puis produit un dataset validé (parquet), les graphes d'analyse et un
-journal de suivi des runs.
+Pipeline reproductible et tracé : à partir de la table ``bronze.telemetry`` (médaillon ;
+le CSV brut y est chargé par ``indusense-ingest``), vérifie l'absence de données
+personnelles, dédoublonne (garde idempotente), enrichit d'axes temporels, puis produit un
+dataset validé (parquet), les graphes d'analyse et un journal de runs.
+
+Prérequis : ``indusense-ingest`` a alimenté ``bronze.telemetry``.
 
 Sorties (sous ``config.ANALYSE_TELEMETRY_DIR``) :
 
@@ -34,6 +36,7 @@ import pandas as pd  # noqa: E402
 import seaborn as sns  # noqa: E402
 
 from indusense import config  # noqa: E402
+from indusense.data.db import read_bronze  # noqa: E402
 
 SHIFT_ORDER = ["matin", "apres-midi", "nuit"]
 
@@ -42,9 +45,13 @@ PII_PATTERNS = ("operator", "name", "nom", "badge", "email", "mail", "user", "ag
 
 
 # --- Chargement -------------------------------------------------------------
-def load_telemetry_raw() -> pd.DataFrame:
-    """Charge la télémétrie brute (CSV UTF-8), `timestamp` parsé en datetime."""
-    return pd.read_csv(config.RAW_TELEMETRY, encoding="utf-8", parse_dates=["timestamp"])
+def load_telemetry() -> pd.DataFrame:
+    """Charge la télémétrie depuis ``bronze.telemetry`` (médaillon).
+
+    Prérequis : ``indusense-ingest`` a chargé le CSV brut dans bronze. ``timestamp`` est
+    déjà typé en base ; la clé technique ``telemetry_id`` est écartée.
+    """
+    return read_bronze("telemetry").drop(columns=["telemetry_id"], errors="ignore")
 
 
 # --- Étape 1 : anonymisation (vérification) ---------------------------------
@@ -399,7 +406,7 @@ def run_analysis(now: datetime | None = None) -> dict:
     fig_dir = run_dir / "figures"
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    raw = load_telemetry_raw()
+    raw = load_telemetry()
     pii = check_no_personal_data(raw)
     deduped, n_doublons = deduplicate(raw)
     df = enrich(deduped)
@@ -412,7 +419,7 @@ def run_analysis(now: datetime | None = None) -> dict:
     meta = {
         "run_id": run_id,
         "timestamp": now.isoformat(timespec="seconds"),
-        "source": str(config.RAW_TELEMETRY),
+        "source": "bronze.telemetry",
         "dataset": str(parquet_path),
         "anonymisation_requise": pii["anonymisation_requise"],
         "colonnes_dcp": pii["colonnes_dcp"],

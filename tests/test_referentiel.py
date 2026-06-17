@@ -40,31 +40,6 @@ def _maintenance() -> pd.DataFrame:
     })
 
 
-def test_parse_insert_handles_null_and_quotes() -> None:
-    sql = (
-        "INSERT INTO t (id, name, note, qty) VALUES\n"
-        "(1, 'a, b', NULL, 2.5),\n"
-        "(2, 'l''eau', 'ok', 3)\n"
-        "ON CONFLICT (id) DO UPDATE SET id = id;"
-    )
-    df = ref._parse_insert(sql, "t")
-    assert list(df.columns) == ["id", "name", "note", "qty"]
-    assert df.loc[0, "name"] == "a, b"  # virgule dans une chaîne quotée
-    assert pd.isna(df.loc[0, "note"])  # NULL -> valeur manquante
-    assert df.loc[0, "qty"] == 2.5 and df.loc[0, "id"] == 1
-    assert df.loc[1, "name"] == "l'eau"  # quote SQL doublée déséchappée
-
-
-def test_load_referentiel_parses_real_dump() -> None:
-    machine, maintenance = ref.load_referentiel()
-    assert len(machine) == 15 and len(maintenance) == 115
-    assert machine.set_index("machine_code").loc["MACH-01", "model"] == "InduPress-X2"
-    assert (maintenance["maintenance_type"] == "reactive").sum() == 25
-    # related_incident_id : NULL pour proactif, renseigné pour réactif.
-    reactive = maintenance[maintenance["maintenance_type"] == "reactive"]
-    assert reactive["related_incident_id"].notna().all()
-
-
 def test_check_integrity_ok() -> None:
     rep = ref.check_integrity(_machine(), _maintenance())
     assert rep["machine_pk_unique"] and rep["maintenance_pk_unique"]

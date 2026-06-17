@@ -1,12 +1,12 @@
 # Méthodologie — analyse du référentiel
 
-## Source : le dump SQL fourni, parsé directement
+## Source : la couche bronze (médaillon)
 Le référentiel provient du dump `data/raw/machine.sql` (tables `machine` et
-`maintenance`). L'analyse **parse directement les `INSERT` du dump** (`load_referentiel`)
-— donnée lue *à la source*, **sans dépendance à une base**. Le pipeline est ainsi
-autonome et reproductible, comme ceux de la télémétrie et des incidents (lecture du CSV
-brut). Le même dump alimente par ailleurs le schéma `bronze` via `indusense-ingest
---migrate` (chargement verbatim) : les deux vues portent la même donnée.
+`maintenance`), chargé dans `bronze` par `indusense-ingest --migrate`. L'analyse lit la
+**couche bronze** (`load_referentiel` → `SELECT … FROM bronze.*`), pas le dump : en
+architecture médaillon, le brut n'a qu'un seul lecteur (l'ingestion) et tout l'aval
+s'appuie sur la couche gouvernée — **source unique de vérité**, typage/encodage faits une
+seule fois, lignage centralisé.
 
 ## Anonymisation (RGPD) : non requise
 Le référentiel ne comporte **aucune donnée personnelle** : caractéristiques d'équipement

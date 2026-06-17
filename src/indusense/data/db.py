@@ -5,6 +5,7 @@ Cible l'instance du conteneur Docker fourni (cf. ``config.DB_URL``, driver psyco
 
 from __future__ import annotations
 
+import pandas as pd
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
@@ -22,6 +23,18 @@ def get_engine(echo: bool = False) -> Engine:
 
 
 SessionLocal = sessionmaker()
+
+
+def read_bronze(table: str, engine: Engine | None = None) -> pd.DataFrame:
+    """Lit une table du schéma ``bronze`` dans un DataFrame.
+
+    Point d'entrée **unique** des analyses en aval (médaillon) : la donnée brute n'a
+    qu'un seul lecteur, l'ingestion ``raw -> bronze`` ; tout le reste lit ``bronze``.
+    Le nom de table provient de constantes internes (inséré en littéral, échappé).
+    """
+    ident = table.replace('"', '""')
+    with (engine or get_engine()).connect() as conn:
+        return pd.read_sql(text(f'SELECT * FROM "{config.SCHEMA_BRONZE}"."{ident}"'), conn)
 
 
 def ensure_schema(engine: Engine, schema: str) -> None:
