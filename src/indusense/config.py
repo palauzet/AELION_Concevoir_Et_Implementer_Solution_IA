@@ -41,7 +41,18 @@ GOLD_DATASET = DATA_PROCESSED / "gold_dataset.parquet"
 # --- Artefacts d'ingestion (runs horodatés, versionnés) ---------------------
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 INGEST_INCIDENTS_DIR = ARTIFACTS_DIR / "ingestions" / "incidents"
+ANALYSE_TELEMETRY_DIR = ARTIFACTS_DIR / "analyses" / "telemetry"
 RUN_TS_FORMAT = "%Y%m%d%H%M"  # dossier de run : AAAAMMJJHHMM
+
+# Mesures capteurs de la télémétrie (ordre stable pour les figures/corrélations).
+# `pieces_produced` est traité à part comme variable de production (sortie machine).
+TELEMETRY_SENSORS = (
+    "temperature_c",
+    "pressure_bar",
+    "voltage_mean_v",
+    "rotation_mean_rpm",
+)
+TELEMETRY_PRODUCTION = "pieces_produced"
 
 # Les 9 signaux d'incident (flags type_*), ordre stable pour le dataset/figures.
 INCIDENT_SIGNALS = (
