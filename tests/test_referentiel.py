@@ -7,7 +7,7 @@ import json
 import pandas as pd
 
 from indusense import config
-from indusense.data import referentiel_analyze as ref
+from indusense.data import referentiel as ref
 
 
 def _machine() -> pd.DataFrame:

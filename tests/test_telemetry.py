@@ -7,7 +7,7 @@ import json
 import pandas as pd
 
 from indusense import config
-from indusense.data import telemetry_analyze as tel
+from indusense.data import telemetry as tel
 
 
 def _sample(n: int = 48) -> pd.DataFrame:

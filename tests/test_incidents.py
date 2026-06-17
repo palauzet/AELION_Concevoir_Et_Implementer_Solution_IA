@@ -7,7 +7,7 @@ import json
 import pandas as pd
 
 from indusense import config
-from indusense.data import incidents_ingest as ing
+from indusense.data import incidents as ing
 from indusense.data.anonymize import anonymize_operators
 
 
