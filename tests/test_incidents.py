@@ -80,6 +80,34 @@ def test_check_shift_coherence() -> None:
     assert rep2["n_incoherents"] >= 1
 
 
+def test_check_severity() -> None:
+    ok = pd.DataFrame({"severity": [2, 3, 5, 4, 3]})
+    rep = ok.pipe(ing.check_severity)
+    assert rep["regle_1_5_respectee"] is True
+    assert rep["min"] == 2 and rep["max"] == 5
+    assert rep["niveaux_absents"] == [1]  # niveau 1 absent (signal de biais)
+
+    # Valeur hors borne + NaN -> règle non respectée.
+    ko = pd.DataFrame({"severity": [1, 6, None]})
+    rep2 = ing.check_severity(ko)
+    assert rep2["regle_1_5_respectee"] is False
+    assert rep2["n_hors_bornes"] == 1 and rep2["n_nan"] == 1
+
+
+def test_check_type_flags() -> None:
+    rep = ing.check_type_flags(_sample())  # 0/1 valides, chaque ligne a un signal
+    assert rep["flags_binaires"] is True
+    assert rep["colonnes_non_binaires"] == {}
+    assert rep["n_lignes_sans_signal"] == 0
+
+    # Valeur non binaire (2) injectée dans un flag -> signalée.
+    bad = _sample()
+    bad.loc[0, "type_surchauffe"] = 2
+    rep2 = ing.check_type_flags(bad)
+    assert rep2["flags_binaires"] is False
+    assert "type_surchauffe" in rep2["colonnes_non_binaires"]
+
+
 def test_machine_association() -> None:
     df = ing.enrich(anonymize_operators(_sample()))
     assoc = ing.machine_association(df)

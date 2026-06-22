@@ -141,6 +141,52 @@ def check_shift_coherence(df: pd.DataFrame) -> dict:
     }
 
 
+# --- Contrôle de cohérence de la sévérité (règle métier 1–5) ----------------
+def check_severity(df: pd.DataFrame) -> dict:
+    """Contrôle qualité de la sévérité (règle métier : ∈ [1, 5]) — diagnostic bronze.
+
+    Rapporte la plage, le nombre de valeurs hors [1, 5], les NaN, et les **niveaux de
+    sévérité absents** — ce dernier point capturant un éventuel **biais de saisie** (ex.
+    micro-incidents non remontés). Lecture seule, intra-source ; une correction relèverait
+    du silver.
+    """
+    s = df["severity"]
+    non_null = s.dropna()
+    presents = {int(v) for v in non_null.unique()}
+    n_hors = int((~non_null.between(1, 5)).sum())
+    n_nan = int(s.isna().sum())
+    return {
+        "min": int(non_null.min()) if len(non_null) else None,
+        "max": int(non_null.max()) if len(non_null) else None,
+        "n_hors_bornes": n_hors,
+        "n_nan": n_nan,
+        "niveaux_absents": sorted(set(range(1, 6)) - presents),
+        "regle_1_5_respectee": bool(n_hors == 0 and n_nan == 0),
+    }
+
+
+# --- Contrôle des flags type_* (règle métier binaire 0/1) -------------------
+def check_type_flags(df: pd.DataFrame) -> dict:
+    """Contrôle qualité des flags `type_*` (règle métier : valeurs **binaires 0/1**).
+
+    Diagnostic bronze (lecture seule, intra-source) : signale toute colonne contenant une
+    valeur ≠ 0/1 ou des NaN, et le nombre de lignes **sans aucun signal** (incident orphelin,
+    qui fausserait la typologie). Une correction relèverait du silver.
+    """
+    flags = list(config.INCIDENT_SIGNALS)
+    non_binaires = {}
+    for c in flags:
+        hors = sorted(float(v) for v in df[c].dropna().unique() if v not in (0, 1))
+        n_nan = int(df[c].isna().sum())
+        if hors or n_nan:
+            non_binaires[c] = {"valeurs_hors": hors, "n_nan": n_nan}
+    return {
+        "flags_binaires": len(non_binaires) == 0,
+        "colonnes_non_binaires": non_binaires,
+        "n_lignes_sans_signal": int((df[flags].sum(axis=1) == 0).sum()),
+    }
+
+
 # --- Métriques --------------------------------------------------------------
 def compute_metrics(df: pd.DataFrame) -> dict:
     """Métriques de suivi du dataset produit."""
@@ -593,6 +639,20 @@ partition **valide** — matin **06–13**, après-midi **14–21**, nuit **22�
 **bronze** (intra-source, diagnostic) ; toute correction d'un `shift` erroné relèverait du
 **silver**.
 
+## Cohérence de la sévérité (règle métier 1–5)
+`check_severity` vérifie la règle **sévérité ∈ [1, 5]** : plage, valeurs hors bornes, NaN, et
+**niveaux absents**. Constat : règle **respectée** (toutes les valeurs dans [1, 5], 0 hors
+borne, 0 NaN), **mais la sévérité 1 n'apparaît jamais** (min observé = 2). À surveiller — un
+niveau absent peut signaler un **biais de saisie** (micro-incidents non remontés), enjeu de
+représentativité (**C2**) pour un futur modèle. Diagnostic **bronze** ; une éventuelle
+imputation/normalisation relèverait du **silver**.
+
+## Flags `type_*` binaires (0/1)
+`check_type_flags` vérifie que chaque colonne `type_*` ne contient que **0 ou 1** (aucune
+autre valeur, aucun NaN) et qu'aucune ligne n'est **sans signal** (incident orphelin).
+Constat : règle **respectée** — 9 flags strictement binaires, 0 NaN, chaque incident porte
+au moins un signal (1 à 2). Diagnostic **bronze** ; toute correction relèverait du **silver**.
+
 ## Corrélation sévérité ↔ type de panne (choix des tests)
 La sévérité est **ordinale** (1–5) et le type de panne **nominal** (9 catégories,
 multi-étiquette) : Pearson/Spearman ne s'appliquent pas à une variable nominale. On
@@ -656,6 +716,8 @@ def run_ingestion(now: datetime | None = None) -> dict:
         "dataset": str(parquet_path),
         "dataset_csv": str(csv_path),
         "coherence_shift": check_shift_coherence(df),
+        "controle_severite": check_severity(df),
+        "controle_type_flags": check_type_flags(df),
         "figures": figures,
         "colonnes": list(df.columns),
         **metrics,

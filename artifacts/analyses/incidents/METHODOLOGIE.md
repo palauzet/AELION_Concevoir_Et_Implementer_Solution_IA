@@ -73,6 +73,20 @@ partition **valide** — matin **06–13**, après-midi **14–21**, nuit **22�
 **bronze** (intra-source, diagnostic) ; toute correction d'un `shift` erroné relèverait du
 **silver**.
 
+## Cohérence de la sévérité (règle métier 1–5)
+`check_severity` vérifie la règle **sévérité ∈ [1, 5]** : plage, valeurs hors bornes, NaN, et
+**niveaux absents**. Constat : règle **respectée** (toutes les valeurs dans [1, 5], 0 hors
+borne, 0 NaN), **mais la sévérité 1 n'apparaît jamais** (min observé = 2). À surveiller — un
+niveau absent peut signaler un **biais de saisie** (micro-incidents non remontés), enjeu de
+représentativité (**C2**) pour un futur modèle. Diagnostic **bronze** ; une éventuelle
+imputation/normalisation relèverait du **silver**.
+
+## Flags `type_*` binaires (0/1)
+`check_type_flags` vérifie que chaque colonne `type_*` ne contient que **0 ou 1** (aucune
+autre valeur, aucun NaN) et qu'aucune ligne n'est **sans signal** (incident orphelin).
+Constat : règle **respectée** — 9 flags strictement binaires, 0 NaN, chaque incident porte
+au moins un signal (1 à 2). Diagnostic **bronze** ; toute correction relèverait du **silver**.
+
 ## Corrélation sévérité ↔ type de panne (choix des tests)
 La sévérité est **ordinale** (1–5) et le type de panne **nominal** (9 catégories,
 multi-étiquette) : Pearson/Spearman ne s'appliquent pas à une variable nominale. On
