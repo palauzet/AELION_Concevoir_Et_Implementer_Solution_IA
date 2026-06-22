@@ -123,7 +123,20 @@ def test_run_smoke(tmp_path, monkeypatch) -> None:
     assert "model" in incident.columns
     maintenance = pd.read_parquet(run_dir / "maintenance.parquet")
     assert "action_type" not in maintenance.columns  # retiré (redondant)
+    assert "created_at" not in maintenance.columns  # audit retiré
     assert (run_dir / "figures").is_dir()
+
+    # Dates uniformisées : datetime64 naïf (sans fuseau) partout ; incident fusionné.
+    def _naive_dt(s: pd.Series) -> bool:
+        return "datetime64" in str(s.dtype) and getattr(s.dtype, "tz", None) is None
+
+    machine = pd.read_parquet(run_dir / "machine.parquet")
+    assert _naive_dt(tel["timestamp"])
+    assert _naive_dt(maintenance["maintenance_at"])
+    assert _naive_dt(machine["commissioning_date"])
+    assert {"timestamp"} <= set(incident.columns)
+    assert {"date", "time"}.isdisjoint(incident.columns)  # fusionnées en timestamp
+    assert _naive_dt(incident["timestamp"])
     runs = json.loads((tmp_path / "runs.json").read_text(encoding="utf-8"))
     assert runs[-1]["run_id"] == meta["run_id"]
     assert (tmp_path / "METHODOLOGIE.md").exists()

@@ -18,6 +18,13 @@ Couche **nettoyée, conformée, intégrée** entre bronze (fidèle à la source)
    prédictive un outlier peut être l'anomalie annonciatrice ; le tri se fera au gold.
 5. **Enrichissement** : jointure dimension machine → `model`, `criticality`.
 
+## Dates uniformisées (conformance)
+Le bronze est hétérogène (incidents `date` + chaîne `time` ; télémétrie naïve ; maintenance
+tz-aware). En silver, **toutes les dates/datetimes sont conformées en `datetime64` naïf
+(interprété UTC)** : on retire les fuseaux (`maintenance_at`), on fusionne incident
+`date`+`time` en un **`timestamp`** canonique, et on supprime les horodatages d'audit DB
+(`created_at`/`updated_at`, non analytiques). Format unique aval : `YYYY-MM-DD HH:MM:SS`.
+
 ## Autres tables
 - **incident** : anonymisé (`operator_*` supprimés), signal/confiance + axes temporels,
   enrichi `model`/`criticality`.

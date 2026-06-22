@@ -45,14 +45,24 @@ from indusense.data.db import ensure_schema, get_engine, read_bronze  # noqa: E4
 SENSORS = list(config.TELEMETRY_SENSORS)
 
 
+# --- Dates : format uniforme (datetime64 naïf, interprété UTC) --------------
+AUDIT_COLS = ["created_at", "updated_at"]
+
+
+def _naive_utc(s: pd.Series) -> pd.Series:
+    """Conforme une série date/datetime (tz-aware, naïve ou date) en datetime64 **naïf** UTC."""
+    return pd.to_datetime(s, utc=True).dt.tz_localize(None)
+
+
 # --- Dimension machine (réutilisée pour l'enrichissement) -------------------
 def _machine_dim() -> pd.DataFrame:
     return read_bronze("machine")[["machine_code", "model", "criticality"]]
 
 
 def build_machine() -> pd.DataFrame:
-    """Dimension machine conformée : + heures équivalentes/jour, + flag capacité."""
-    m = read_bronze("machine").copy()
+    """Dimension machine conformée : dates uniformes, sans audit, + capacité dérivée."""
+    m = read_bronze("machine").drop(columns=AUDIT_COLS, errors="ignore").copy()
+    m["commissioning_date"] = _naive_utc(m["commissioning_date"])
     ratio = m["max_daily_capacity"] / m["max_hourly_capacity_pieces"]
     m["heures_equivalentes_jour"] = ratio.round().astype(int)
     m["capacite_incoherente"] = (ratio - ratio.median()).abs() > 1.0
@@ -60,9 +70,12 @@ def build_machine() -> pd.DataFrame:
 
 
 def build_maintenance() -> pd.DataFrame:
-    """Maintenance conformée : retire `action_type` (redondant), enrichie modèle/criticité."""
-    mt = read_bronze("maintenance").drop(columns=["action_type"], errors="ignore").copy()
+    """Maintenance conformée : retire `action_type`/audit, date uniforme, enrichie."""
+    mt = read_bronze("maintenance").drop(
+        columns=["action_type", *AUDIT_COLS], errors="ignore"
+    ).copy()
     mt["duration_hours"] = mt["duration_hours"].astype(float)
+    mt["maintenance_at"] = _naive_utc(mt["maintenance_at"])
     return mt.merge(_machine_dim(), on="machine_code", how="left")
 
 
@@ -137,6 +150,7 @@ def build_telemetry() -> tuple[pd.DataFrame, dict]:
     """Construit ``silver.telemetry`` et retourne (df, métriques)."""
     df = read_bronze("telemetry").drop(columns=["telemetry_id"], errors="ignore")
     df, n_doublons = tel.deduplicate(df)
+    df["timestamp"] = _naive_utc(df["timestamp"])  # format date uniforme
     windows = _maintenance_windows()
     df = _flag_and_segment(df, windows)
     df = impute_telemetry(df)
@@ -155,9 +169,18 @@ def build_telemetry() -> tuple[pd.DataFrame, dict]:
 
 
 def build_incident() -> pd.DataFrame:
-    """Construit ``silver.incident`` : anonymisé, enrichi (signal/confiance + modèle/criticité)."""
+    """Construit ``silver.incident`` : anonymisé, enrichi, **dates uniformisées**.
+
+    La date et l'heure (colonnes séparées `date` + chaîne `time`) sont fusionnées en un
+    **`timestamp`** canonique (datetime64 naïf), cohérent avec la télémétrie et la
+    maintenance ; les colonnes source redondantes sont retirées.
+    """
     df = read_bronze("incident").drop(columns=["incident_pk"], errors="ignore")
     df = inc.compute_confidence(inc.enrich(anonymize_operators(df)))
+    df = df.rename(columns={"dt": "timestamp"})
+    df["timestamp"] = _naive_utc(df["timestamp"])
+    df["jour"] = _naive_utc(df["jour"])
+    df = df.drop(columns=["date", "time"], errors="ignore")
     return df.merge(_machine_dim(), left_on="machine_id", right_on="machine_code", how="left").drop(
         columns=["machine_code"]
     )
@@ -268,6 +291,13 @@ Couche **nettoyée, conformée, intégrée** entre bronze (fidèle à la source)
 4. **Flag outliers (IQR)** : `*_is_outlier`, valeurs **conservées** — en maintenance
    prédictive un outlier peut être l'anomalie annonciatrice ; le tri se fera au gold.
 5. **Enrichissement** : jointure dimension machine → `model`, `criticality`.
+
+## Dates uniformisées (conformance)
+Le bronze est hétérogène (incidents `date` + chaîne `time` ; télémétrie naïve ; maintenance
+tz-aware). En silver, **toutes les dates/datetimes sont conformées en `datetime64` naïf
+(interprété UTC)** : on retire les fuseaux (`maintenance_at`), on fusionne incident
+`date`+`time` en un **`timestamp`** canonique, et on supprime les horodatages d'audit DB
+(`created_at`/`updated_at`, non analytiques). Format unique aval : `YYYY-MM-DD HH:MM:SS`.
 
 ## Autres tables
 - **incident** : anonymisé (`operator_*` supprimés), signal/confiance + axes temporels,

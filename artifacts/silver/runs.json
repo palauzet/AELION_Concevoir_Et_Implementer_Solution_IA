@@ -38,5 +38,25 @@
     "n_nan_residuels": 60,
     "n_incidents": 1245,
     "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\silver\\202606221433"
+  },
+  {
+    "run_id": "202606221454",
+    "timestamp": "2026-06-22T14:54:17",
+    "n_telemetry": 134280,
+    "n_doublons_supprimes": 1346,
+    "n_imputes_total": 2752,
+    "n_nan_residuels": 60,
+    "n_incidents": 1245,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\silver\\202606221454"
+  },
+  {
+    "run_id": "202606221455",
+    "timestamp": "2026-06-22T14:55:13",
+    "n_telemetry": 134280,
+    "n_doublons_supprimes": 1346,
+    "n_imputes_total": 2752,
+    "n_nan_residuels": 60,
+    "n_incidents": 1245,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\silver\\202606221455"
   }
 ]
