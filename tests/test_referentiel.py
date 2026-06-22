@@ -66,6 +66,21 @@ def test_maintenance_summary() -> None:
     assert summ["n_lie_incident"] == 2
 
 
+def test_check_integrity_capacity() -> None:
+    # Échantillon nominal : ratios daily/hourly homogènes (~16) -> aucune incohérence.
+    rep = ref.check_integrity(_machine(), _maintenance())
+    assert rep["capacite_machines_incoherentes"] == []
+    assert 15 <= rep["capacite_ratio_median"] <= 17
+
+    # Machine au ratio aberrant (1200/50 = 24, loin du facteur ~16) -> signalée.
+    extra = _machine().iloc[[0]].copy()
+    extra["machine_code"] = "MACH-99"
+    extra["max_daily_capacity"] = 1200
+    extra["max_hourly_capacity_pieces"] = 50
+    m = pd.concat([_machine(), extra], ignore_index=True)
+    assert "MACH-99" in ref.check_integrity(m, _maintenance())["capacite_machines_incoherentes"]
+
+
 def test_capacity_by_model() -> None:
     cap = ref.capacity_by_model(_machine())
     # X1 (1405) > X2 (moyenne 785) en capacité journalière.

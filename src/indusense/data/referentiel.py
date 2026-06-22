@@ -63,6 +63,8 @@ def check_integrity(machine: pd.DataFrame, maintenance: pd.DataFrame) -> dict:
     - unicité des clés primaires (`machine_code`, `maintenance_id`) ;
     - intégrité référentielle : tout `machine_code` de maintenance existe dans machine ;
     - cohérence réactif ↔ incident : une maintenance réactive référence un incident ;
+    - **cohérence des capacités** : `max_daily_capacity ≈ max_hourly_capacity_pieces × k`
+      (facteur k homogène sur le parc ; signale les machines déviantes) ;
     - absence de colonnes DCP (anonymisation non requise).
     """
     codes = set(machine["machine_code"])
@@ -70,11 +72,22 @@ def check_integrity(machine: pd.DataFrame, maintenance: pd.DataFrame) -> dict:
     reactive = maintenance["maintenance_type"] == "reactive"
     dcp = [c for c in (*machine.columns, *maintenance.columns)
            if any(p in c.lower() for p in PII_PATTERNS)]
+
+    # Cohérence capacité : daily ≈ hourly × k (k = heures-équivalentes/jour, ~16 sur le
+    # parc — l'hypothèse ×24 est fausse). On valide l'homogénéité du facteur et signale
+    # toute machine s'en écartant de plus de TOL heures-équivalentes.
+    ratio = machine["max_daily_capacity"] / machine["max_hourly_capacity_pieces"]
+    ratio_median = float(ratio.median())
+    tol = 1.0
+    incoherentes = sorted(machine.loc[(ratio - ratio_median).abs() > tol, "machine_code"])
+
     return {
         "machine_pk_unique": bool(machine["machine_code"].is_unique),
         "maintenance_pk_unique": bool(maintenance["maintenance_id"].is_unique),
         "machines_orphelines": orphelins,
         "reactive_sans_incident": int((reactive & maintenance["related_incident_id"].isna()).sum()),
+        "capacite_ratio_median": round(ratio_median, 2),
+        "capacite_machines_incoherentes": incoherentes,
         "colonnes_dcp": dcp,
         "anonymisation_requise": bool(dcp),
     }
@@ -331,6 +344,15 @@ durée, incident lié). `check_integrity` détecte tout champ DCP éventuel.
 Avant analyse : unicité des clés primaires (`machine_code`, `maintenance_id`), intégrité
 référentielle (tout `machine_code` de maintenance existe dans `machine`), et cohérence
 réactif ↔ incident (une maintenance `reactive` référence un `related_incident_id`).
+
+### Cohérence des capacités
+`max_daily_capacity ≈ max_hourly_capacity_pieces × k`, où *k* est le nombre d'heures de
+production équivalentes par jour. Sur le parc, *k* ≈ **16** (≈ 16 h/j) et très homogène —
+**l'hypothèse intuitive ×24 est donc fausse** (les machines ne produisent pas 24 h/24). Le
+contrôle valide l'homogénéité du facteur (`capacite_ratio_median`) et **signale** les
+machines déviantes (`capacite_machines_incoherentes`) — saisie suspecte. C'est un
+**diagnostic bronze** (lecture seule, intra-source) ; dériver une capacité canonique ou
+corriger une valeur relèverait du **silver**.
 
 ## Périmètre d'analyse
 - **Parc machines** : répartition par modèle / criticité / ligne / atelier, capacités par

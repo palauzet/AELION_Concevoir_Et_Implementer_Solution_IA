@@ -18,6 +18,15 @@ Avant analyse : unicité des clés primaires (`machine_code`, `maintenance_id`),
 référentielle (tout `machine_code` de maintenance existe dans `machine`), et cohérence
 réactif ↔ incident (une maintenance `reactive` référence un `related_incident_id`).
 
+### Cohérence des capacités
+`max_daily_capacity ≈ max_hourly_capacity_pieces × k`, où *k* est le nombre d'heures de
+production équivalentes par jour. Sur le parc, *k* ≈ **16** (≈ 16 h/j) et très homogène —
+**l'hypothèse intuitive ×24 est donc fausse** (les machines ne produisent pas 24 h/24). Le
+contrôle valide l'homogénéité du facteur (`capacite_ratio_median`) et **signale** les
+machines déviantes (`capacite_machines_incoherentes`) — saisie suspecte. C'est un
+**diagnostic bronze** (lecture seule, intra-source) ; dériver une capacité canonique ou
+corriger une valeur relèverait du **silver**.
+
 ## Périmètre d'analyse
 - **Parc machines** : répartition par modèle / criticité / ligne / atelier, capacités par
   modèle, ancienneté (année de mise en service).
