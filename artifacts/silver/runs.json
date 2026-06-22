@@ -1,0 +1,42 @@
+[
+  {
+    "run_id": "202606221429",
+    "timestamp": "2026-06-22T14:29:40",
+    "n_telemetry": 134280,
+    "n_doublons_supprimes": 1346,
+    "n_imputes_total": 2752,
+    "n_nan_residuels": 60,
+    "n_incidents": 1245,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\silver\\202606221429"
+  },
+  {
+    "run_id": "202606221431",
+    "timestamp": "2026-06-22T14:31:23",
+    "n_telemetry": 134280,
+    "n_doublons_supprimes": 1346,
+    "n_imputes_total": 2752,
+    "n_nan_residuels": 60,
+    "n_incidents": 1245,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\silver\\202606221431"
+  },
+  {
+    "run_id": "202606221432",
+    "timestamp": "2026-06-22T14:32:29",
+    "n_telemetry": 134280,
+    "n_doublons_supprimes": 1346,
+    "n_imputes_total": 2752,
+    "n_nan_residuels": 60,
+    "n_incidents": 1245,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\silver\\202606221432"
+  },
+  {
+    "run_id": "202606221433",
+    "timestamp": "2026-06-22T14:33:32",
+    "n_telemetry": 134280,
+    "n_doublons_supprimes": 1346,
+    "n_imputes_total": 2752,
+    "n_nan_residuels": 60,
+    "n_incidents": 1245,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\silver\\202606221433"
+  }
+]

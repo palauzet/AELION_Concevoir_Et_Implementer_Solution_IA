@@ -20,6 +20,7 @@ data/processed/
 artifacts/analyses/incidents/*/
 artifacts/analyses/telemetry/*/
 artifacts/analyses/referentiel/*/
+artifacts/silver/*/
 
 # Notebooks
 .ipynb_checkpoints/

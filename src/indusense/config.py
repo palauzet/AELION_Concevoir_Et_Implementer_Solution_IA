@@ -47,6 +47,7 @@ ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 ANALYSE_INCIDENTS_DIR = ARTIFACTS_DIR / "analyses" / "incidents"
 ANALYSE_TELEMETRY_DIR = ARTIFACTS_DIR / "analyses" / "telemetry"
 ANALYSE_REFERENTIEL_DIR = ARTIFACTS_DIR / "analyses" / "referentiel"
+SILVER_DIR = ARTIFACTS_DIR / "silver"
 RUN_TS_FORMAT = "%Y%m%d%H%M"  # dossier de run : AAAAMMJJHHMM
 
 # Mesures capteurs de la télémétrie (ordre stable pour les figures/corrélations).
