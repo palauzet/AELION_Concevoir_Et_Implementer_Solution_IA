@@ -5,13 +5,16 @@ sur ``Base.metadata`` (source de vérité du schéma, pilotée par Alembic).
 from __future__ import annotations
 
 from indusense.data.db import Base
-from indusense.data.models.bronze import Incident, Machine, Maintenance, Telemetry
-from indusense.data.models.silver import (
+from indusense.data.models.bronze_tables import Incident, Machine, Maintenance, Telemetry
+from indusense.data.models.silver_tables import (
     SilverComponent,
     SilverIncident,
     SilverMachine,
     SilverMaintenance,
-    SilverTelemetry,
+    SilverMeasurement,
+    SilverModel,
+    SilverReading,
+    SilverSensor,
 )
 
 __all__ = [
@@ -24,5 +27,8 @@ __all__ = [
     "SilverIncident",
     "SilverMachine",
     "SilverMaintenance",
-    "SilverTelemetry",
+    "SilverMeasurement",
+    "SilverModel",
+    "SilverReading",
+    "SilverSensor",
 ]

@@ -11,7 +11,8 @@ Cœur US 1.3 sur la télémétrie (l'ordre est critique) :
    inter-maintenance* (ne franchit pas une fenêtre — respecte le « reset » machine) et hors
    fenêtres ; les NaN en fenêtre de maintenance restent NaN (non opérationnels) ;
 4. flag des outliers (IQR) — valeurs **conservées** (un outlier peut être l'anomalie) ;
-5. enrichissement par la dimension machine (``model``, ``criticality``).
+5. décomposition 3NF : en-tête ``reading`` (FK ``machine_pk``) + détail ``measurement``
+   (forme longue : 1 mesure / (relevé, capteur), via la dimension ``sensor``).
 
 Prérequis : ``indusense-ingest --migrate`` a alimenté ``bronze``.
 
@@ -55,14 +56,41 @@ def _naive_utc(s: pd.Series) -> pd.Series:
     return pd.to_datetime(s, utc=True).dt.tz_localize(None)
 
 
-# --- Dimension machine (porte model/criticality — star-schema) --------------
-def build_machine() -> pd.DataFrame:
-    """Dimension machine conformée : dates uniformes, sans audit, + capacité dérivée."""
+# --- Dimensions à clés surrogates (3NF) -------------------------------------
+def build_model(machine: pd.DataFrame) -> pd.DataFrame:
+    """Dimension type de machine : ``model_id`` (surrogate déterministe) + ``name``."""
+    noms = sorted(machine["model"].dropna().unique())
+    return pd.DataFrame({"model_id": range(1, len(noms) + 1), "name": noms})
+
+
+def build_sensor() -> pd.DataFrame:
+    """Dimension capteur : ``sensor_id`` (surrogate, ordre ``config``) + ``name`` + ``unit``.
+
+    Un capteur = une **ligne** : en ajouter/retirer un = modifier ``config.SENSOR_UNITS``,
+    sans modifier le schéma silver (évolutivité, motivation de la 3NF des mesures).
+    """
+    return pd.DataFrame({
+        "sensor_id": range(1, len(SENSORS) + 1),
+        "name": SENSORS,
+        "unit": [config.SENSOR_UNITS[s] for s in SENSORS],
+    })
+
+
+def build_machine(model_dim: pd.DataFrame) -> pd.DataFrame:
+    """Dimension machine : PK surrogate ``machine_pk``, ``machine_code`` clé métier, FK model.
+
+    ``model`` (texte) → ``model_id`` (FK vers ``silver.model``). ``machine_pk`` déterministe
+    (``machine_code`` triés → 1..N) pour un rechargement reproductible.
+    """
     m = read_bronze("machine").drop(columns=AUDIT_COLS, errors="ignore").copy()
     m["commissioning_date"] = _naive_utc(m["commissioning_date"])
     ratio = m["max_daily_capacity"] / m["max_hourly_capacity_pieces"]
     m["heures_equivalentes_jour"] = ratio.round().astype(int)
     m["capacite_incoherente"] = (ratio - ratio.median()).abs() > 1.0
+    model_map = dict(zip(model_dim["name"], model_dim["model_id"], strict=True))
+    m["model_id"] = m["model"].map(model_map)
+    m = m.drop(columns=["model"]).sort_values("machine_code").reset_index(drop=True)
+    m.insert(0, "machine_pk", range(1, len(m) + 1))
     return m
 
 
@@ -73,17 +101,20 @@ def build_component(maintenance: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame({"component_id": range(1, len(noms) + 1), "name": noms})
 
 
-def build_maintenance(maintenance: pd.DataFrame, component_dim: pd.DataFrame) -> pd.DataFrame:
-    """Maintenance normalisée : ``component`` -> ``component_id`` (FK) ; retire model/criticality.
-
-    ``model``/``criticality`` ne sont plus dupliqués ici (dimension machine, jointure FK).
+def build_maintenance(
+    maintenance: pd.DataFrame, component_dim: pd.DataFrame, machine_dim: pd.DataFrame
+) -> pd.DataFrame:
+    """Maintenance normalisée : ``component`` -> ``component_id`` (FK) ; ``machine_code`` ->
+    ``machine_pk`` (FK surrogate). ``model``/``criticality`` non dupliqués (dimension machine).
     """
     mt = maintenance.drop(columns=["action_type", *AUDIT_COLS], errors="ignore").copy()
     mt["duration_hours"] = mt["duration_hours"].astype(float)
     mt["maintenance_at"] = _naive_utc(mt["maintenance_at"])
-    mapping = dict(zip(component_dim["name"], component_dim["component_id"], strict=True))
-    mt["component_id"] = mt["component"].map(mapping)
-    return mt.drop(columns=["component"])
+    comp_map = dict(zip(component_dim["name"], component_dim["component_id"], strict=True))
+    mt["component_id"] = mt["component"].map(comp_map)
+    machine_map = dict(zip(machine_dim["machine_code"], machine_dim["machine_pk"], strict=True))
+    mt["machine_pk"] = mt["machine_code"].map(machine_map)
+    return mt.drop(columns=["component", "machine_code"])
 
 
 # --- Télémétrie : fenêtres de maintenance + segments ------------------------
@@ -153,8 +184,13 @@ def flag_outliers(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def build_telemetry() -> tuple[pd.DataFrame, dict]:
-    """Construit ``silver.telemetry`` et retourne (df, métriques)."""
+def build_clean_telemetry() -> tuple[pd.DataFrame, dict]:
+    """Nettoie la télémétrie (df **large** interne) et retourne (df, métriques).
+
+    Dédoublonnage → flag maintenance → imputation maintenance-aware → flag outliers. Le df
+    large sert aux figures (boxplots) puis à dériver ``reading`` (en-tête) + ``measurement``
+    (détail, forme longue). ``machine_id`` reste la clé métier (mappée en ``machine_pk`` aval).
+    """
     df = read_bronze("telemetry").drop(columns=["telemetry_id"], errors="ignore")
     df, n_doublons = tel.deduplicate(df)
     df["timestamp"] = _naive_utc(df["timestamp"])  # format date uniforme
@@ -162,7 +198,7 @@ def build_telemetry() -> tuple[pd.DataFrame, dict]:
     df = _flag_and_segment(df, windows)
     df = impute_telemetry(df)
     df = flag_outliers(df)
-    df = df.drop(columns=["_segment"])  # machine_id = FK vers silver.machine (pas de copie dim)
+    df = df.drop(columns=["_segment"]).reset_index(drop=True)
     metrics = {
         "n_lignes": int(len(df)),
         "n_doublons_supprimes": int(n_doublons),
@@ -174,18 +210,61 @@ def build_telemetry() -> tuple[pd.DataFrame, dict]:
     return df, metrics
 
 
-def build_incident() -> pd.DataFrame:
+def build_reading(clean: pd.DataFrame, machine_dim: pd.DataFrame) -> pd.DataFrame:
+    """En-tête d'un relevé : ``reading_id`` (surrogate 1..N, ordre de ``clean``) + FK machine.
+
+    ``machine_id`` (clé métier) → ``machine_pk`` (FK surrogate). Porte ``pieces_produced``
+    (sortie de production, pas un capteur) et ``during_maintenance`` (régime du relevé).
+    """
+    machine_map = dict(zip(machine_dim["machine_code"], machine_dim["machine_pk"], strict=True))
+    reading = pd.DataFrame({
+        "reading_id": range(1, len(clean) + 1),
+        "machine_pk": clean["machine_id"].map(machine_map).to_numpy(),
+        "timestamp": clean["timestamp"].to_numpy(),
+        "during_maintenance": clean["during_maintenance"].to_numpy(),
+        "pieces_produced": clean["pieces_produced"].to_numpy(),
+    })
+    return reading
+
+
+def build_measurement(
+    clean: pd.DataFrame, reading: pd.DataFrame, sensor_dim: pd.DataFrame
+) -> pd.DataFrame:
+    """Détail : **unpivot** des capteurs en forme longue (1 ligne / (relevé, capteur)).
+
+    Aligné sur l'ordre de ``clean`` (= ``reading``). Chaque capteur porte sa ``value`` et ses
+    flags ``was_imputed`` / ``is_outlier``. ``measurement_id`` = SERIAL (généré par la DB).
+    """
+    sensor_map = dict(zip(sensor_dim["name"], sensor_dim["sensor_id"], strict=True))
+    reading_id = reading["reading_id"].to_numpy()
+    frames = [
+        pd.DataFrame({
+            "reading_id": reading_id,
+            "sensor_id": sensor_map[col],
+            "value": clean[col].to_numpy(),
+            "was_imputed": clean[f"{col}_was_imputed"].to_numpy(),
+            "is_outlier": clean[f"{col}_is_outlier"].to_numpy(),
+        })
+        for col in SENSORS
+    ]
+    return pd.concat(frames, ignore_index=True)
+
+
+def build_incident(machine_dim: pd.DataFrame) -> pd.DataFrame:
     """Construit ``silver.incident`` : anonymisé, enrichi, **dates uniformisées**.
 
     ``date`` + chaîne ``time`` fusionnées en un **``timestamp``** canonique (datetime64 naïf).
-    ``machine_id`` = FK vers ``silver.machine`` (model/criticality récupérés par jointure).
+    ``machine_id`` (clé métier) → ``machine_pk`` (FK surrogate, nullable si code inconnu) ;
+    ``machine_valide`` (issu de l'enrichissement) trace les codes hors référentiel.
     """
     df = read_bronze("incident").drop(columns=["incident_pk"], errors="ignore")
     df = inc.compute_confidence(inc.enrich(anonymize_operators(df)))
     df = df.rename(columns={"dt": "timestamp"})
     df["timestamp"] = _naive_utc(df["timestamp"])
     df["jour"] = _naive_utc(df["jour"])
-    return df.drop(columns=["date", "time"], errors="ignore")
+    machine_map = dict(zip(machine_dim["machine_code"], machine_dim["machine_pk"], strict=True))
+    df["machine_pk"] = df["machine_id"].map(machine_map).astype("Int64")
+    return df.drop(columns=["date", "time", "machine_id"], errors="ignore")
 
 
 # --- Figures (viewers US 1.3) -----------------------------------------------
@@ -243,7 +322,9 @@ def write_silver_tables(tables: dict[str, pd.DataFrame], engine) -> None:
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {qualified} RESTART IDENTITY CASCADE"))
     for name, df in tables.items():
-        df.to_sql(name, engine, schema=config.SCHEMA_SILVER, if_exists="append", index=False)
+        # chunksize : ``measurement`` est volumineuse (~4× la télémétrie, forme longue).
+        df.to_sql(name, engine, schema=config.SCHEMA_SILVER, if_exists="append",
+                  index=False, chunksize=10_000)
 
 
 def _render_runs_md(runs: list[dict]) -> str:
@@ -298,16 +379,19 @@ Couche **nettoyée, conformée, intégrée** entre bronze (fidèle à la source)
    et on ne ponte pas le reset (sinon contamination du signal de dégradation, cible ML).
 4. **Flag outliers (IQR)** : `*_is_outlier`, valeurs **conservées** — en maintenance
    prédictive un outlier peut être l'anomalie annonciatrice ; le tri se fera au gold.
-5. **FK machine** : `machine_id` référence `silver.machine` (model/criticality récupérés par
-   jointure, non copiés).
+5. **Décomposition 3NF (en-tête/détail)** : `reading` = un relevé horodaté (`reading_id`,
+   `machine_pk`, `timestamp`, `during_maintenance`, `pieces_produced`) ; `measurement` = une
+   mesure capteur (`reading_id`, `sensor_id`, `value`, `was_imputed`, `is_outlier`).
 
-## Normalisation (mesurée, star-schema)
-`model` et `criticality` ne sont **pas dupliqués** dans les faits : ils vivent dans la
-dimension `silver.machine` et se récupèrent par **jointure** (`machine_id`/`machine_code`).
-`component` est une **table de lookup** `silver.component` (FK `maintenance.component_id`).
-Les enums (`criticality`, `maintenance_type`) sont contraints par **CHECK** (pas de table).
-Choix *mesuré* : on retire la redondance et on pose les FK, sans 3NF stricte (jointures
-minimisées pour le ML) ; les capteurs restent en **format large**.
+## Normalisation 3NF — motivée par l'évolutivité
+Les **mesures de capteurs** sont normalisées en **forme longue** : un capteur = une **ligne**
+de `measurement` référençant la dimension `silver.sensor`. Objectif : **ajouter/retirer un
+capteur sans modifier le schéma** (data change, pas DDL) — il suffit d'éditer
+`config.SENSOR_UNITS`. Des **clés surrogates** identifient les machines (`machine_pk`) et les
+types de machines (`silver.model.model_id`) ; tous les faits référencent la machine par
+`machine_pk`. `component` reste une table de lookup (`silver.component`). Les enums
+(`criticality`, `maintenance_type`) sont contraints par **CHECK**.
+Compromis assumé : ~4× plus de lignes de mesures et un **repivot** nécessaire au gold.
 
 ## Dates uniformisées (conformance)
 Le bronze est hétérogène (incidents `date` + chaîne `time` ; télémétrie naïve ; maintenance
@@ -317,13 +401,16 @@ tz-aware). En silver, **toutes les dates/datetimes sont conformées en `datetime
 (`created_at`/`updated_at`, non analytiques). Format unique aval : `YYYY-MM-DD HH:MM:SS`.
 
 ## Autres tables
+- **model** : dimension type de machine (`model_id` surrogate, `name`).
+- **sensor** : dimension capteur (`sensor_id` surrogate, `name`, `unit`).
+- **machine** : dimension à PK surrogate (`machine_pk`), `machine_code` clé métier unique,
+  `model` → `model_id` (FK) ; conformée (`heures_equivalentes_jour` ≈ 16, flag
+  `capacite_incoherente`, CHECK criticité).
 - **incident** : anonymisé (`operator_*` supprimés), signal/confiance + axes temporels ;
-  `machine_id` = FK vers la dimension machine.
-- **machine** : dimension (porte `model`/`criticality`) conformée (+ `heures_equivalentes_jour`
-  ≈ 16, flag `capacite_incoherente`, CHECK criticité).
+  `machine_id` → `machine_pk` (FK surrogate, nullable si code hors référentiel).
 - **component** : lookup des composants (`component_id`, `name`).
 - **maintenance** : `action_type`/`model`/`criticality` retirés ; `component` → `component_id`
-  (FK lookup) ; CHECK `maintenance_type`.
+  (FK lookup) ; `machine_code` → `machine_pk` (FK) ; CHECK `maintenance_type`.
 
 ## Reporté au gold
 Usage des fenêtres de maintenance (exclusion de l'entraînement et/ou features
@@ -341,24 +428,34 @@ def run(now: datetime | None = None) -> dict:
     fig_dir = run_dir / "figures"
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    machine = build_machine()
+    machine_bronze = read_bronze("machine")
+    model = build_model(machine_bronze)
+    sensor = build_sensor()
+    machine = build_machine(model)
     maintenance_bronze = read_bronze("maintenance")
     component = build_component(maintenance_bronze)
-    maintenance = build_maintenance(maintenance_bronze, component)
-    telemetry, tel_metrics = build_telemetry()
-    incident = build_incident()
-    # Ordre = FK : machine + component avant maintenance ; machine avant telemetry/incident.
+    maintenance = build_maintenance(maintenance_bronze, component, machine)
+    clean, tel_metrics = build_clean_telemetry()
+    reading = build_reading(clean, machine)
+    measurement = build_measurement(clean, reading, sensor)
+    incident = build_incident(machine)
+    # Ordre = FK : dimensions (model/sensor/component/machine) avant les faits
+    # (reading→machine ; measurement→reading/sensor ; maintenance→machine/component ;
+    # incident→machine).
     tables = {
-        "machine": machine,
+        "model": model,
+        "sensor": sensor,
         "component": component,
+        "machine": machine,
+        "reading": reading,
+        "measurement": measurement,
         "maintenance": maintenance,
-        "telemetry": telemetry,
         "incident": incident,
     }
 
     for name, df in tables.items():
         df.to_parquet(run_dir / f"{name}.parquet", index=False)
-    figures = make_figures(telemetry, tel_metrics, fig_dir)
+    figures = make_figures(clean, tel_metrics, fig_dir)
     write_silver_tables(tables, get_engine())
 
     meta = {
@@ -367,6 +464,10 @@ def run(now: datetime | None = None) -> dict:
         "source": "bronze.*",
         "telemetry": tel_metrics,
         "n_imputes_total": int(sum(tel_metrics["n_valeurs_imputees"].values())),
+        "n_readings": int(len(reading)),
+        "n_measurements": int(len(measurement)),
+        "n_sensors": int(len(sensor)),
+        "n_models": int(len(model)),
         "n_incidents": int(len(incident)),
         "n_machines": int(len(machine)),
         "n_maintenances": int(len(maintenance)),
@@ -395,6 +496,8 @@ def main(argv: list[str] | None = None) -> None:
         f"maintenance={t['n_relevés_maintenance']}, imputés={meta['n_imputes_total']}, "
         f"NaN résiduels={t['n_nan_residuels']})"
     )
+    print(f"  reading: {meta['n_readings']} | measurement: {meta['n_measurements']} "
+          f"(capteurs={meta['n_sensors']}, types machine={meta['n_models']})")
     print(f"  incident: {meta['n_incidents']} | machine: {meta['n_machines']} | "
           f"maintenance: {meta['n_maintenances']} | composants: {meta['n_composants']}")
     print(f"  {len(meta['figures'])} figures ; tables écrites dans le schéma "

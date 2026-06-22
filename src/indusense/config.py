@@ -60,6 +60,15 @@ TELEMETRY_SENSORS = (
 )
 TELEMETRY_PRODUCTION = "pieces_produced"
 
+# Unités des capteurs (dimension ``silver.sensor`` : un capteur = une ligne).
+# Ajouter/retirer un capteur = modifier ce mapping, sans toucher au schéma silver.
+SENSOR_UNITS = {
+    "temperature_c": "°C",
+    "pressure_bar": "bar",
+    "voltage_mean_v": "V",
+    "rotation_mean_rpm": "rpm",
+}
+
 # Les 9 signaux d'incident (flags type_*), ordre stable pour le dataset/figures.
 INCIDENT_SIGNALS = (
     "type_surchauffe",

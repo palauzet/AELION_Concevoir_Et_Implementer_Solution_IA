@@ -41,9 +41,37 @@ def test_build_component_and_mapping() -> None:
     comp = silver.build_component(mt)
     assert list(comp.columns) == ["component_id", "name"]
     assert comp["component_id"].is_unique and comp["name"].is_unique
-    mapped = silver.build_maintenance(mt, comp)
+    machine = pd.DataFrame({"machine_code": ["MACH-01"], "machine_pk": [1]})
+    mapped = silver.build_maintenance(mt, comp, machine)
     assert "component" not in mapped.columns and "component_id" in mapped.columns
-    assert mapped["component_id"].isin(comp["component_id"]).all()  # FK valide
+    assert "machine_code" not in mapped.columns and "machine_pk" in mapped.columns
+    assert mapped["component_id"].isin(comp["component_id"]).all()  # FK composant valide
+    assert mapped["machine_pk"].isin(machine["machine_pk"]).all()  # FK machine valide
+
+
+def test_build_sensor() -> None:
+    s = silver.build_sensor()
+    assert list(s.columns) == ["sensor_id", "name", "unit"]
+    assert list(s["name"]) == list(config.TELEMETRY_SENSORS)  # un capteur = une ligne
+    assert s["sensor_id"].is_unique and s["unit"].notna().all()
+
+
+def test_build_reading_and_measurement() -> None:
+    """Décomposition 3NF : en-tête reading + détail measurement (unpivot, FK cohérentes)."""
+    clean = silver.flag_outliers(silver.impute_telemetry(_telemetry_with_flags()))
+    clean = clean.drop(columns=["_segment"]).reset_index(drop=True)
+    machine = pd.DataFrame({"machine_code": ["MACH-01"], "machine_pk": [7]})
+    sensor = silver.build_sensor()
+    reading = silver.build_reading(clean, machine)
+    assert len(reading) == len(clean) and (reading["machine_pk"] == 7).all()
+    assert set(reading.columns) == {
+        "reading_id", "machine_pk", "timestamp", "during_maintenance", "pieces_produced"
+    }
+    meas = silver.build_measurement(clean, reading, sensor)
+    assert len(meas) == len(clean) * len(config.TELEMETRY_SENSORS)  # 1 mesure / (relevé, capteur)
+    assert meas["sensor_id"].isin(sensor["sensor_id"]).all()
+    assert meas["reading_id"].isin(reading["reading_id"]).all()
+    assert set(meas.columns) == {"reading_id", "sensor_id", "value", "was_imputed", "is_outlier"}
 
 
 def test_flag_outliers() -> None:
@@ -123,29 +151,41 @@ def test_run_smoke(tmp_path, monkeypatch) -> None:
 
     meta = silver.run()
     run_dir = tmp_path / meta["run_id"]
-    for name in ("machine", "component", "maintenance", "telemetry", "incident"):
+    for name in ("model", "sensor", "component", "machine", "reading", "measurement",
+                 "maintenance", "incident"):
         assert (run_dir / f"{name}.parquet").exists()
-    tel = pd.read_parquet(run_dir / "telemetry.parquet")
     assert meta["telemetry"]["n_doublons_supprimes"] == 1  # doublon retiré
-    assert {"during_maintenance", "temperature_c_was_imputed",
-            "temperature_c_is_outlier"} <= set(tel.columns)
-    assert {"model", "criticality"}.isdisjoint(tel.columns)  # dims non copiées (normalisé)
+
+    reading = pd.read_parquet(run_dir / "reading.parquet")
+    measurement = pd.read_parquet(run_dir / "measurement.parquet")
+    assert {"machine_pk", "during_maintenance", "pieces_produced"} <= set(reading.columns)
+    assert {"model", "criticality"}.isdisjoint(reading.columns)  # dims non copiées (3NF)
+    # Unpivot : 1 mesure / (relevé, capteur) ; flags portés par mesure.
+    assert len(measurement) == len(reading) * len(config.TELEMETRY_SENSORS)
+    assert {"reading_id", "sensor_id", "value", "was_imputed", "is_outlier"} == set(
+        measurement.columns
+    )
+    assert measurement["reading_id"].isin(reading["reading_id"]).all()
+
+    machine = pd.read_parquet(run_dir / "machine.parquet")
+    assert {"machine_pk", "machine_code", "model_id"} <= set(machine.columns)
+    assert "model" not in machine.columns  # model (texte) -> model_id (FK)
+
     incident = pd.read_parquet(run_dir / "incident.parquet")
     assert "operator_name" not in incident.columns  # anonymisé
+    assert "machine_pk" in incident.columns and "machine_id" not in incident.columns
     assert {"model", "criticality"}.isdisjoint(incident.columns)
     maintenance = pd.read_parquet(run_dir / "maintenance.parquet")
-    assert "component_id" in maintenance.columns  # lookup normalisé
-    assert {"component", "action_type", "model", "criticality", "created_at"}.isdisjoint(
-        maintenance.columns
-    )
+    assert {"component_id", "machine_pk"} <= set(maintenance.columns)  # FK normalisées
+    assert {"component", "machine_code", "action_type", "model", "criticality",
+            "created_at"}.isdisjoint(maintenance.columns)
     assert (run_dir / "figures").is_dir()
 
     # Dates uniformisées : datetime64 naïf (sans fuseau) partout ; incident fusionné.
     def _naive_dt(s: pd.Series) -> bool:
         return "datetime64" in str(s.dtype) and getattr(s.dtype, "tz", None) is None
 
-    machine = pd.read_parquet(run_dir / "machine.parquet")
-    assert _naive_dt(tel["timestamp"])
+    assert _naive_dt(reading["timestamp"])
     assert _naive_dt(maintenance["maintenance_at"])
     assert _naive_dt(machine["commissioning_date"])
     assert {"timestamp"} <= set(incident.columns)
