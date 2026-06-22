@@ -361,5 +361,16 @@
     "n_nan_total": 0,
     "confidence_moyenne": 0.998,
     "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\incidents\\202606221527"
+  },
+  {
+    "run_id": "202606222228",
+    "timestamp": "2026-06-22T22:28:26",
+    "source": "bronze.incident",
+    "n_lignes": 1245,
+    "n_colonnes": 27,
+    "machines_uniques": 15,
+    "n_nan_total": 0,
+    "confidence_moyenne": 0.998,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\incidents\\202606222228"
   }
 ]
