@@ -153,6 +153,7 @@ class SilverMeasurement(Base):
     value: Mapped[float | None] = mapped_column(Float, nullable=True)
     was_imputed: Mapped[bool] = mapped_column(Boolean)
     is_outlier: Mapped[bool] = mapped_column(Boolean)
+    is_saturated: Mapped[bool] = mapped_column(Boolean)
 
 
 class SilverIncident(Base):

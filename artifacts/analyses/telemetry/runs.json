@@ -250,5 +250,24 @@
     "n_nan_total": 2812,
     "n_outliers_total": 3266,
     "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\telemetry\\202606222228"
+  },
+  {
+    "run_id": "202606230035",
+    "timestamp": "2026-06-23T00:35:25",
+    "source": "bronze.telemetry",
+    "n_lignes": 134280,
+    "n_colonnes": 11,
+    "machines_uniques": 15,
+    "n_doublons_supprimes": 1346,
+    "n_nan_total": 2812,
+    "n_outliers_total": 3266,
+    "n_satures_total": 154,
+    "capteurs_satures": [
+      "temperature_c",
+      "voltage_mean_v",
+      "rotation_mean_rpm"
+    ],
+    "capteurs_unite_suspecte": [],
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\telemetry\\202606230035"
   }
 ]

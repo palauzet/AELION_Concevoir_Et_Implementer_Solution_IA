@@ -22,6 +22,20 @@ sensible aux valeurs extrêmes elles-mêmes) et lisible. Les outliers sont **com
 signalés**, non supprimés à ce stade : leur traitement (capping, imputation) relèvera de
 la couche *silver*, une fois leur cause instruite.
 
+## Contrôle des unités (cohérence inter-machine)
+`check_unit_consistency` vérifie que toutes les machines mesurent un capteur dans la **même
+unité** : si c'est le cas, le rapport **amplitude des moyennes inter-machine** (`max/min`)
+reste proche de 1. Au-delà de **1,5×**, on **alerte** sur un possible mélange d'unités (ex.
+°C vs °F donnerait ~×1,8 + 32). Heuristique de **dépistage**, pas de preuve formelle.
+
+## Saturation capteur (écrêtage sur bornes de plage)
+`detect_saturation` repère les valeurs **censurées** sur les limites de l'instrument : un
+**empilement** anormal exactement sur le min/max global (≥ 3 relevés et > 2× la densité juste
+à l'intérieur). Donnée continue → tomber pile sur une borne ronde n'est pas un arrondi. C'est
+**distinct d'un outlier** : valeur *valide mais tronquée* (ex. température réelle ≥ borne), à
+**ne pas imputer**. Le silver matérialise ce constat par un flag `*_is_saturated` (par mesure),
+indépendant de `*_is_outlier`.
+
 ## Corrélations
 - **Pearson** : liens **linéaires** entre mesures (grandeurs continues).
 - **Spearman** : liens **monotones** (sur les rangs), robustes aux outliers et aux

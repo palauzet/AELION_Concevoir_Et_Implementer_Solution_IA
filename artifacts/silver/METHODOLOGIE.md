@@ -16,6 +16,9 @@ Couche **nettoyée, conformée, intégrée** entre bronze (fidèle à la source)
    et on ne ponte pas le reset (sinon contamination du signal de dégradation, cible ML).
 4. **Flag outliers (IQR)** : `*_is_outlier`, valeurs **conservées** — en maintenance
    prédictive un outlier peut être l'anomalie annonciatrice ; le tri se fera au gold.
+   **Flag saturation** : `*_is_saturated` marque les valeurs **écrêtées** sur une borne de
+   plage capteur (cf. QC bronze `detect_saturation`) — valides mais **censurées** (≥/≤ borne),
+   à **ne pas imputer** ; distinct de l'outlier. Porté par chaque `measurement`.
 5. **Décomposition 3NF (en-tête/détail)** : `reading` = un relevé horodaté (`reading_id`,
    `machine_pk`, `timestamp`, `during_maintenance`, `pieces_produced`) ; `measurement` = une
    mesure capteur (`reading_id`, `sensor_id`, `value`, `was_imputed`, `is_outlier`).

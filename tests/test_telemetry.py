@@ -53,6 +53,32 @@ def test_detect_outliers_bounds() -> None:
     assert (out["pct"].between(0, 100)).all()
 
 
+def test_check_unit_consistency() -> None:
+    df = _sample()
+    out = tel.check_unit_consistency(df)
+    assert list(out.index) == list(config.TELEMETRY_SENSORS)
+    assert not out["unite_suspecte"].any()  # même unité => amplitude inter-machine ~1
+    # Une machine en Fahrenheit (≈ ×1,8 + 32) => amplitude suspecte sur la température.
+    fahr = df.copy()
+    m2 = fahr["machine_id"] == "MACH-02"
+    fahr.loc[m2, "temperature_c"] = fahr.loc[m2, "temperature_c"] * 1.8 + 32
+    out2 = tel.check_unit_consistency(fahr)
+    assert bool(out2.loc["temperature_c", "unite_suspecte"]) is True
+
+
+def test_detect_saturation() -> None:
+    df = _sample()  # rampes régulières : aucun empilement sur une borne
+    base = tel.detect_saturation(df)
+    assert not base["sature_haut"].any() and not base["sature_bas"].any()
+    # Force un plafond : 6 relevés écrêtés exactement sur 80.0 (empilement).
+    sat = df.copy()
+    sat.loc[sat.index[:6], "temperature_c"] = 80.0
+    out = tel.detect_saturation(sat)
+    assert bool(out.loc["temperature_c", "sature_haut"]) is True
+    assert out.loc["temperature_c", "n_satures"] >= 6
+    assert bool(out.loc["pressure_bar", "sature_haut"]) is False  # témoin : pas d'écrêtage
+
+
 def test_correlations_shape() -> None:
     corr = tel.correlations(_sample())
     cols = [*config.TELEMETRY_SENSORS, config.TELEMETRY_PRODUCTION]
@@ -83,6 +109,9 @@ def test_run_analysis_smoke(tmp_path, monkeypatch) -> None:
     assert (run_dir / "figures").is_dir()
     assert len(list((run_dir / "figures").glob("*.svg"))) == 9
     assert meta["anonymisation_requise"] is False
+    # Contrôles qualité capteurs (échantillon régulier : ni saturation ni unité suspecte).
+    assert meta["n_satures_total"] == 0
+    assert meta["capteurs_satures"] == [] and meta["capteurs_unite_suspecte"] == []
 
     runs = json.loads((tmp_path / "runs.json").read_text(encoding="utf-8"))
     assert runs[-1]["run_id"] == meta["run_id"]

@@ -59,7 +59,7 @@ def test_build_sensor() -> None:
 def test_build_reading_and_measurement() -> None:
     """Décomposition 3NF : en-tête reading + détail measurement (unpivot, FK cohérentes)."""
     clean = silver.flag_outliers(silver.impute_telemetry(_telemetry_with_flags()))
-    clean = clean.drop(columns=["_segment"]).reset_index(drop=True)
+    clean = silver.flag_saturation(clean).drop(columns=["_segment"]).reset_index(drop=True)
     machine = pd.DataFrame({"machine_code": ["MACH-01"], "machine_pk": [7]})
     sensor = silver.build_sensor()
     reading = silver.build_reading(clean, machine)
@@ -71,7 +71,26 @@ def test_build_reading_and_measurement() -> None:
     assert len(meas) == len(clean) * len(config.TELEMETRY_SENSORS)  # 1 mesure / (relevé, capteur)
     assert meas["sensor_id"].isin(sensor["sensor_id"]).all()
     assert meas["reading_id"].isin(reading["reading_id"]).all()
-    assert set(meas.columns) == {"reading_id", "sensor_id", "value", "was_imputed", "is_outlier"}
+    assert set(meas.columns) == {
+        "reading_id", "sensor_id", "value", "was_imputed", "is_outlier", "is_saturated"
+    }
+
+
+def test_flag_saturation() -> None:
+    """Écrêtage : empilement sur une borne ronde => is_saturated, pas un point isolé."""
+    df = pd.DataFrame({
+        "machine_id": "MACH-01",
+        "timestamp": pd.date_range("2025-06-01", periods=10, freq="h"),
+        # 4 relevés collés au plafond 50.0 (empilement) + valeurs internes variées.
+        "temperature_c": [50.0, 50.0, 50.0, 50.0, 41.0, 42.0, 43.0, 44.0, 45.0, 46.0],
+        "pressure_bar": [190.0 + i for i in range(10)],  # rampe : pas de saturation
+        "voltage_mean_v": [227.0] * 10,
+        "rotation_mean_rpm": [1500.0] * 10,
+    })
+    out = silver.flag_saturation(df)
+    assert out["temperature_c_is_saturated"].tolist()[:4] == [True, True, True, True]
+    assert not any(out["temperature_c_is_saturated"].tolist()[4:])  # internes non écrêtées
+    assert not out["pressure_bar_is_saturated"].any()  # rampe régulière => aucune borne saturée
 
 
 def test_flag_outliers() -> None:
@@ -162,9 +181,8 @@ def test_run_smoke(tmp_path, monkeypatch) -> None:
     assert {"model", "criticality"}.isdisjoint(reading.columns)  # dims non copiées (3NF)
     # Unpivot : 1 mesure / (relevé, capteur) ; flags portés par mesure.
     assert len(measurement) == len(reading) * len(config.TELEMETRY_SENSORS)
-    assert {"reading_id", "sensor_id", "value", "was_imputed", "is_outlier"} == set(
-        measurement.columns
-    )
+    assert {"reading_id", "sensor_id", "value", "was_imputed", "is_outlier",
+            "is_saturated"} == set(measurement.columns)
     assert measurement["reading_id"].isin(reading["reading_id"]).all()
 
     machine = pd.read_parquet(run_dir / "machine.parquet")

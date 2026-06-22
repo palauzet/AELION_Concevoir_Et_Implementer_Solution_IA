@@ -138,5 +138,15 @@
     "n_nan_residuels": 60,
     "n_incidents": 1245,
     "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\silver\\202606221956"
+  },
+  {
+    "run_id": "202606230035",
+    "timestamp": "2026-06-23T00:35:34",
+    "n_telemetry": 134280,
+    "n_doublons_supprimes": 1346,
+    "n_imputes_total": 2752,
+    "n_nan_residuels": 60,
+    "n_incidents": 1245,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\silver\\202606230035"
   }
 ]

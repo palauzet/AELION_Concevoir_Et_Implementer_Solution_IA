@@ -184,6 +184,24 @@ def flag_outliers(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def flag_saturation(df: pd.DataFrame) -> pd.DataFrame:
+    """Ajoute ``<capteur>_is_saturated`` : valeur **écrêtée** sur une borne de plage capteur.
+
+    Distinct de ``is_outlier`` : valeur **valide mais censurée** (cf. ``tel.detect_saturation``)
+    sur une borne confirmée saturée — à **ne pas imputer**. Le tri/usage se fera au gold.
+    """
+    df = df.copy()
+    sat = tel.detect_saturation(df, tuple(SENSORS))
+    for col in SENSORS:
+        flag = pd.Series(False, index=df.index)
+        if sat.loc[col, "sature_haut"]:
+            flag |= df[col] == sat.loc[col, "borne_haute"]
+        if sat.loc[col, "sature_bas"]:
+            flag |= df[col] == sat.loc[col, "borne_basse"]
+        df[f"{col}_is_saturated"] = flag.fillna(False)
+    return df
+
+
 def build_clean_telemetry() -> tuple[pd.DataFrame, dict]:
     """Nettoie la télémétrie (df **large** interne) et retourne (df, métriques).
 
@@ -198,6 +216,7 @@ def build_clean_telemetry() -> tuple[pd.DataFrame, dict]:
     df = _flag_and_segment(df, windows)
     df = impute_telemetry(df)
     df = flag_outliers(df)
+    df = flag_saturation(df)
     df = df.drop(columns=["_segment"]).reset_index(drop=True)
     metrics = {
         "n_lignes": int(len(df)),
@@ -205,6 +224,7 @@ def build_clean_telemetry() -> tuple[pd.DataFrame, dict]:
         "n_relevés_maintenance": int(df["during_maintenance"].sum()),
         "n_valeurs_imputees": {c: int(df[f"{c}_was_imputed"].sum()) for c in SENSORS},
         "n_outliers_flagges": {c: int(df[f"{c}_is_outlier"].sum()) for c in SENSORS},
+        "n_satures_flagges": {c: int(df[f"{c}_is_saturated"].sum()) for c in SENSORS},
         "n_nan_residuels": int(df[SENSORS].isna().sum().sum()),
     }
     return df, metrics
@@ -244,6 +264,7 @@ def build_measurement(
             "value": clean[col].to_numpy(),
             "was_imputed": clean[f"{col}_was_imputed"].to_numpy(),
             "is_outlier": clean[f"{col}_is_outlier"].to_numpy(),
+            "is_saturated": clean[f"{col}_is_saturated"].to_numpy(),
         })
         for col in SENSORS
     ]
@@ -379,6 +400,9 @@ Couche **nettoyée, conformée, intégrée** entre bronze (fidèle à la source)
    et on ne ponte pas le reset (sinon contamination du signal de dégradation, cible ML).
 4. **Flag outliers (IQR)** : `*_is_outlier`, valeurs **conservées** — en maintenance
    prédictive un outlier peut être l'anomalie annonciatrice ; le tri se fera au gold.
+   **Flag saturation** : `*_is_saturated` marque les valeurs **écrêtées** sur une borne de
+   plage capteur (cf. QC bronze `detect_saturation`) — valides mais **censurées** (≥/≤ borne),
+   à **ne pas imputer** ; distinct de l'outlier. Porté par chaque `measurement`.
 5. **Décomposition 3NF (en-tête/détail)** : `reading` = un relevé horodaté (`reading_id`,
    `machine_pk`, `timestamp`, `during_maintenance`, `pieces_produced`) ; `measurement` = une
    mesure capteur (`reading_id`, `sensor_id`, `value`, `was_imputed`, `is_outlier`).

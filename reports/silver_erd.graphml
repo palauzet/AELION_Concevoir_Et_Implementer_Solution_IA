@@ -118,16 +118,17 @@ duration_hours: float8						<y:LabelModel>
 		<node id="entity4">
 			<data key="nodegraph">
 				<y:GenericNode configuration="com.yworks.entityRelationship.big_entity">
-					<y:Geometry height="154" width="206.12" x="40" y="234"/>
+					<y:Geometry height="174" width="206.12" x="40" y="224"/>
 					<y:Fill color="#202020" transparent="false"/>
 					<y:BorderStyle color="#C4C4C4" type="line" width="1.0"/>
 					<y:NodeLabel alignment="center" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.name" fontFamily="Courier" fontSize="12" fontStyle="plain" hasLineColor="false" modelName="internal" modelPosition="t" backgroundColor="#202020" textColor="#FFFFFF" visible="true" horizontalTextPosition="center" iconTextGap="4" height="22" width="169" x="0" y="4">measurement</y:NodeLabel>
-					<y:NodeLabel alignment="left" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.attributes" fontFamily="Courier" fontSize="12" fontStyle="plain" hasLineColor="false" modelName="custom" modelPosition="t" backgroundColor="#404040" textColor="#C4C4C4" visible="true" horizontalTextPosition="center" iconTextGap="4" height="104" width="169" x="2" y="31.66796875">measurement_id: serial4
+					<y:NodeLabel alignment="left" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.attributes" fontFamily="Courier" fontSize="12" fontStyle="plain" hasLineColor="false" modelName="custom" modelPosition="t" backgroundColor="#404040" textColor="#C4C4C4" visible="true" horizontalTextPosition="center" iconTextGap="4" height="124" width="169" x="2" y="31.66796875">measurement_id: serial4
 reading_id: int4
 sensor_id: int4
 value: float8
 was_imputed: bool
-is_outlier: bool						<y:LabelModel>
+is_outlier: bool
+is_saturated: bool						<y:LabelModel>
 							<y:ErdAttributesNodeLabelModel/>
 						</y:LabelModel>
 						<y:ModelParameter>
@@ -158,7 +159,7 @@ name: varchar(32)						<y:LabelModel>
 		<node id="entity6">
 			<data key="nodegraph">
 				<y:GenericNode configuration="com.yworks.entityRelationship.big_entity">
-					<y:Geometry height="134" width="247.56" x="284" y="477"/>
+					<y:Geometry height="134" width="247.56" x="283" y="468"/>
 					<y:Fill color="#202020" transparent="false"/>
 					<y:BorderStyle color="#C4C4C4" type="line" width="1.0"/>
 					<y:NodeLabel alignment="center" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.name" fontFamily="Courier" fontSize="12" fontStyle="plain" hasLineColor="false" modelName="internal" modelPosition="t" backgroundColor="#202020" textColor="#FFFFFF" visible="true" horizontalTextPosition="center" iconTextGap="4" height="22" width="209" x="0" y="4">reading</y:NodeLabel>

@@ -131,6 +131,79 @@ def detect_outliers(df: pd.DataFrame, cols: tuple[str, ...] | None = None) -> pd
     return pd.DataFrame(rows, index=list(cols))
 
 
+# --- Contrôles qualité capteurs : unités & saturation -----------------------
+# Au-delà de ce ratio d'amplitude inter-machine, on suspecte un mélange d'unités.
+UNIT_AMPLITUDE_MAX = 1.5
+# Saturation : nb minimal de relevés sur la borne, et facteur d'empilement vs densité interne.
+SATURATION_MIN_HITS = 3
+SATURATION_RATIO = 2.0
+
+
+def check_unit_consistency(
+    df: pd.DataFrame, cols: tuple[str, ...] | None = None, max_ratio: float = UNIT_AMPLITUDE_MAX
+) -> pd.DataFrame:
+    """Cohérence d'unité par capteur via l'**amplitude des moyennes inter-machine**.
+
+    Si toutes les machines mesurent dans la même unité, leurs moyennes restent dans une bande
+    étroite (ratio ``max/min`` proche de 1). Un ratio anormalement élevé trahit un **mélange
+    d'unités** (ex. °C vs °F → ~×1,8 + 32, bar vs psi…). Heuristique d'alerte, pas de preuve :
+    retourne par capteur le ratio et un flag ``unite_suspecte``.
+    """
+    cols = cols or config.TELEMETRY_SENSORS
+    rows = []
+    for c in cols:
+        moy = df.groupby("machine_id")[c].mean()
+        lo, hi = float(moy.min()), float(moy.max())
+        ratio = hi / lo if lo else float("nan")
+        rows.append({
+            "min_moy": round(lo, 2),
+            "max_moy": round(hi, 2),
+            "ratio": round(ratio, 2),
+            "unite_suspecte": bool(ratio == ratio and ratio > max_ratio),  # NaN-safe
+        })
+    return pd.DataFrame(rows, index=list(cols))
+
+
+def detect_saturation(
+    df: pd.DataFrame, cols: tuple[str, ...] | None = None, width: float = 1.0
+) -> pd.DataFrame:
+    """Détecte l'**écrêtage (saturation)** sur les bornes de plage capteur.
+
+    Pour chaque capteur, teste le min et le max globaux : une valeur **censurée** sur la limite
+    de l'instrument produit un **empilement** anormal exactement sur la borne. La borne est
+    confirmée saturée si le nombre de relevés *exactement* dessus est ≥ ``SATURATION_MIN_HITS``
+    **et** > ``SATURATION_RATIO`` × la densité dans la largeur ``width`` juste à l'intérieur
+    (donnée continue → tomber pile sur la borne n'est pas un hasard d'arrondi). Distinct d'un
+    outlier IQR : valeur **valide mais tronquée**, à ne pas imputer. Retourne par capteur les
+    bornes, les flags ``sature_bas``/``sature_haut`` et le décompte ``n_satures``.
+    """
+    cols = cols or config.TELEMETRY_SENSORS
+
+    def _confirmed(at: int, adj: int, spread: bool) -> bool:
+        """Borne saturée : assez de relevés dessus ET empilement vs densité interne."""
+        return spread and at >= SATURATION_MIN_HITS and at > SATURATION_RATIO * max(adj, 1)
+
+    rows = []
+    for c in cols:
+        s = df[c].dropna()
+        lo, hi = float(s.min()), float(s.max())
+        spread = hi > lo
+        at_hi = int((s == hi).sum())
+        at_lo = int((s == lo).sum())
+        sat_hi = _confirmed(at_hi, int(((s >= hi - width) & (s < hi)).sum()), spread)
+        sat_lo = _confirmed(at_lo, int(((s > lo) & (s <= lo + width)).sum()), spread)
+        n = (at_hi if sat_hi else 0) + (at_lo if sat_lo else 0)
+        rows.append({
+            "borne_basse": round(lo, 2),
+            "sature_bas": bool(sat_lo),
+            "borne_haute": round(hi, 2),
+            "sature_haut": bool(sat_hi),
+            "n_satures": n,
+            "pct": round(100 * n / len(df), 2) if len(df) else 0.0,
+        })
+    return pd.DataFrame(rows, index=list(cols))
+
+
 def correlations(df: pd.DataFrame) -> dict:
     """Matrices de corrélation Pearson (linéaire) et Spearman (rangs).
 
@@ -145,8 +218,10 @@ def correlations(df: pd.DataFrame) -> dict:
 
 # --- Métriques --------------------------------------------------------------
 def compute_metrics(df: pd.DataFrame, n_doublons: int) -> dict:
-    """Métriques de suivi du dataset produit."""
+    """Métriques de suivi du dataset produit (dont contrôles unités & saturation)."""
     outliers = detect_outliers(df)
+    units = check_unit_consistency(df)
+    saturation = detect_saturation(df)
     return {
         "n_lignes": int(len(df)),
         "n_colonnes": int(df.shape[1]),
@@ -156,6 +231,11 @@ def compute_metrics(df: pd.DataFrame, n_doublons: int) -> dict:
         "periode_debut": str(df["timestamp"].min()),
         "periode_fin": str(df["timestamp"].max()),
         "n_outliers_total": int(outliers["n_outliers"].sum()),
+        "capteurs_unite_suspecte": units.index[units["unite_suspecte"]].tolist(),
+        "n_satures_total": int(saturation["n_satures"].sum()),
+        "capteurs_satures": saturation.index[
+            saturation["sature_bas"] | saturation["sature_haut"]
+        ].tolist(),
     }
 
 
@@ -323,12 +403,14 @@ def _render_runs_md(runs: list[dict]) -> str:
     header = (
         "# Journal des runs — analyse télémétrie\n\n"
         "| Run (AAAAMMJJHHMM) | Lignes | Colonnes | Machines | Doublons retirés | "
-        "NaN | Outliers |\n"
-        "|---|---:|---:|---:|---:|---:|---:|\n"
+        "NaN | Outliers | Saturés | Unité suspecte |\n"
+        "|---|---:|---:|---:|---:|---:|---:|---:|---|\n"
     )
     rows = "".join(
         f"| {r['run_id']} | {r['n_lignes']} | {r['n_colonnes']} | {r['machines_uniques']} | "
-        f"{r['n_doublons_supprimes']} | {r['n_nan_total']} | {r['n_outliers_total']} |\n"
+        f"{r['n_doublons_supprimes']} | {r['n_nan_total']} | {r['n_outliers_total']} | "
+        f"{r.get('n_satures_total', '-')} | "
+        f"{', '.join(r.get('capteurs_unite_suspecte', [])) or '—'} |\n"
         for r in sorted(runs, key=lambda r: r["run_id"])
     )
     return header + rows
@@ -349,6 +431,9 @@ def append_run(meta: dict) -> None:
         "n_doublons_supprimes": meta["n_doublons_supprimes"],
         "n_nan_total": meta["n_nan_total"],
         "n_outliers_total": meta["n_outliers_total"],
+        "n_satures_total": meta["n_satures_total"],
+        "capteurs_satures": meta["capteurs_satures"],
+        "capteurs_unite_suspecte": meta["capteurs_unite_suspecte"],
         "chemin": meta["chemin"],
     })
     path.write_text(json.dumps(runs, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -383,6 +468,20 @@ l'intervalle [Q1 − 1,5·IQR ; Q3 + 1,5·IQR]. Choix robuste (basé sur les qua
 sensible aux valeurs extrêmes elles-mêmes) et lisible. Les outliers sont **comptés et
 signalés**, non supprimés à ce stade : leur traitement (capping, imputation) relèvera de
 la couche *silver*, une fois leur cause instruite.
+
+## Contrôle des unités (cohérence inter-machine)
+`check_unit_consistency` vérifie que toutes les machines mesurent un capteur dans la **même
+unité** : si c'est le cas, le rapport **amplitude des moyennes inter-machine** (`max/min`)
+reste proche de 1. Au-delà de **1,5×**, on **alerte** sur un possible mélange d'unités (ex.
+°C vs °F donnerait ~×1,8 + 32). Heuristique de **dépistage**, pas de preuve formelle.
+
+## Saturation capteur (écrêtage sur bornes de plage)
+`detect_saturation` repère les valeurs **censurées** sur les limites de l'instrument : un
+**empilement** anormal exactement sur le min/max global (≥ 3 relevés et > 2× la densité juste
+à l'intérieur). Donnée continue → tomber pile sur une borne ronde n'est pas un arrondi. C'est
+**distinct d'un outlier** : valeur *valide mais tronquée* (ex. température réelle ≥ borne), à
+**ne pas imputer**. Le silver matérialise ce constat par un flag `*_is_saturated` (par mesure),
+indépendant de `*_is_outlier`.
 
 ## Corrélations
 - **Pearson** : liens **linéaires** entre mesures (grandeurs continues).
@@ -460,6 +559,13 @@ def main(argv: list[str] | None = None) -> None:
         f"machines={meta['machines_uniques']} doublons_retires={meta['n_doublons_supprimes']} "
         f"NaN={meta['n_nan_total']} outliers={meta['n_outliers_total']}"
     )
+    # Contrôles qualité capteurs (alerte si anomalie).
+    sat = meta["capteurs_satures"]
+    print(f"  saturation : {meta['n_satures_total']} relevés écrêtés"
+          + (f" sur {', '.join(sat)}" if sat else " (aucun capteur saturé)"))
+    susp = meta["capteurs_unite_suspecte"]
+    print("  unités : " + (f"⚠ AMPLITUDE SUSPECTE sur {', '.join(susp)} "
+          "(mélange d'unités ?)" if susp else "cohérentes (amplitude inter-machine normale)"))
     print(f"  anonymisation requise : {meta['anonymisation_requise']}")
     print(f"  {len(meta['figures'])} figures générées.")
 
