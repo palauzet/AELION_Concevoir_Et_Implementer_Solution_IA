@@ -74,6 +74,12 @@ def test_run_analysis_smoke(tmp_path, monkeypatch) -> None:
     df = pd.read_parquet(run_dir / "telemetry_clean.parquet")
     assert len(df) == meta["n_lignes"]
     assert {"jour", "heure", "weekday", "shift"} <= set(df.columns)
+    # Export CSV des données résultats (même contenu que le parquet).
+    csv_path = run_dir / "telemetry_clean.csv"
+    assert csv_path.exists()
+    df_csv = pd.read_csv(csv_path, encoding="utf-8-sig")
+    assert len(df_csv) == meta["n_lignes"]
+    assert list(df_csv.columns) == list(df.columns)
     assert (run_dir / "figures").is_dir()
     assert len(list((run_dir / "figures").glob("*.svg"))) == 9
     assert meta["anonymisation_requise"] is False

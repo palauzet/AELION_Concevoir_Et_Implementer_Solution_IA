@@ -97,5 +97,38 @@
     "n_proactive": 90,
     "n_reactive": 25,
     "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\referentiel\\202606171639"
+  },
+  {
+    "run_id": "202606171643",
+    "timestamp": "2026-06-17T16:43:51",
+    "source": "bronze.machine + bronze.maintenance",
+    "n_machines": 15,
+    "n_maintenances": 115,
+    "n_modeles": 4,
+    "n_proactive": 90,
+    "n_reactive": 25,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\referentiel\\202606171643"
+  },
+  {
+    "run_id": "202606221008",
+    "timestamp": "2026-06-22T10:08:10",
+    "source": "bronze.machine + bronze.maintenance",
+    "n_machines": 15,
+    "n_maintenances": 115,
+    "n_modeles": 4,
+    "n_proactive": 90,
+    "n_reactive": 25,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\referentiel\\202606221008"
+  },
+  {
+    "run_id": "202606221008",
+    "timestamp": "2026-06-22T10:08:54",
+    "source": "bronze.machine + bronze.maintenance",
+    "n_machines": 15,
+    "n_maintenances": 115,
+    "n_modeles": 4,
+    "n_proactive": 90,
+    "n_reactive": 25,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\referentiel\\202606221008"
   }
 ]

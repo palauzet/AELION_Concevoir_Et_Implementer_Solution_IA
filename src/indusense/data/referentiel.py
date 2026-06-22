@@ -12,7 +12,8 @@ Sorties (sous ``config.ANALYSE_REFERENTIEL_DIR``) :
 
 - ``runs.json`` / ``runs.md`` : journal des runs.
 - ``METHODOLOGIE.md`` : source, intégrité, choix d'analyse.
-- ``AAAAMMJJHHMM/`` : un dossier par run avec les métadonnées et ``figures/`` (9 SVG).
+- ``AAAAMMJJHHMM/`` : un dossier par run avec les tables analysées (``machine`` &
+  ``maintenance`` en parquet **et** CSV), les métadonnées et ``figures/`` (9 SVG).
 
 Usage :
 
@@ -355,6 +356,15 @@ def run_analysis(now: datetime | None = None) -> dict:
 
     machine, maintenance = load_referentiel()
     integrity = check_integrity(machine, maintenance)
+
+    # Export des deux tables analysées (parquet + CSV utf-8-sig : lisible sous Excel).
+    datasets = {}
+    for nom, d in (("machine", machine), ("maintenance", maintenance)):
+        d.to_parquet(run_dir / f"{nom}.parquet", index=False)
+        csv_path = run_dir / f"{nom}.csv"
+        d.to_csv(csv_path, index=False, encoding="utf-8-sig")
+        datasets[nom] = str(csv_path)
+
     figures = make_figures(machine, maintenance, fig_dir)
 
     metrics = compute_metrics(machine, maintenance)
@@ -362,6 +372,7 @@ def run_analysis(now: datetime | None = None) -> dict:
         "run_id": run_id,
         "timestamp": now.isoformat(timespec="seconds"),
         "source": "bronze.machine + bronze.maintenance",
+        "datasets_csv": datasets,
         "integrite": integrity,
         "figures": figures,
         **metrics,

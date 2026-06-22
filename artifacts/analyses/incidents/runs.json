@@ -229,5 +229,27 @@
     "n_nan_total": 59,
     "confidence_moyenne": 0.984,
     "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\incidents\\202606171639"
+  },
+  {
+    "run_id": "202606171643",
+    "timestamp": "2026-06-17T16:43:41",
+    "source": "bronze.incident",
+    "n_lignes": 900,
+    "n_colonnes": 27,
+    "machines_uniques": 15,
+    "n_nan_total": 59,
+    "confidence_moyenne": 0.984,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\incidents\\202606171643"
+  },
+  {
+    "run_id": "202606221008",
+    "timestamp": "2026-06-22T10:08:41",
+    "source": "bronze.incident",
+    "n_lignes": 900,
+    "n_colonnes": 27,
+    "machines_uniques": 15,
+    "n_nan_total": 59,
+    "confidence_moyenne": 0.984,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\incidents\\202606221008"
   }
 ]

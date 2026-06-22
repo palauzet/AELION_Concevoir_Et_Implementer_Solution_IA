@@ -82,6 +82,10 @@ def test_run_analysis_smoke(tmp_path, monkeypatch) -> None:
     assert meta["n_reactive"] == 2 and meta["n_proactive"] == 4
     assert (run_dir / "figures").is_dir()
     assert len(list((run_dir / "figures").glob("*.svg"))) == 9
+    # Export CSV des deux tables analysées.
+    for nom, n in (("machine", 3), ("maintenance", 6)):
+        assert (run_dir / f"{nom}.csv").exists()
+        assert len(pd.read_csv(run_dir / f"{nom}.csv", encoding="utf-8-sig")) == n
 
     runs = json.loads((tmp_path / "runs.json").read_text(encoding="utf-8"))
     assert runs[-1]["run_id"] == meta["run_id"]

@@ -106,5 +106,41 @@
     "n_nan_total": 0,
     "n_outliers_total": 1093,
     "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\telemetry\\202606171639"
+  },
+  {
+    "run_id": "202606171643",
+    "timestamp": "2026-06-17T16:43:46",
+    "source": "bronze.telemetry",
+    "n_lignes": 134280,
+    "n_colonnes": 11,
+    "machines_uniques": 15,
+    "n_doublons_supprimes": 0,
+    "n_nan_total": 0,
+    "n_outliers_total": 1093,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\telemetry\\202606171643"
+  },
+  {
+    "run_id": "202606221007",
+    "timestamp": "2026-06-22T10:07:56",
+    "source": "bronze.telemetry",
+    "n_lignes": 134280,
+    "n_colonnes": 11,
+    "machines_uniques": 15,
+    "n_doublons_supprimes": 0,
+    "n_nan_total": 0,
+    "n_outliers_total": 1093,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\telemetry\\202606221007"
+  },
+  {
+    "run_id": "202606221008",
+    "timestamp": "2026-06-22T10:08:47",
+    "source": "bronze.telemetry",
+    "n_lignes": 134280,
+    "n_colonnes": 11,
+    "machines_uniques": 15,
+    "n_doublons_supprimes": 0,
+    "n_nan_total": 0,
+    "n_outliers_total": 1093,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\telemetry\\202606221008"
   }
 ]

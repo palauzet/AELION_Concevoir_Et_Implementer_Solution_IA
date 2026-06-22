@@ -11,8 +11,8 @@ Sorties (sous ``config.ANALYSE_TELEMETRY_DIR``) :
 
 - ``runs.json`` / ``runs.md`` : journal des runs.
 - ``METHODOLOGIE.md`` : justification anonymisation (N/A) + dédoublonnage + outliers.
-- ``AAAAMMJJHHMM/`` : un dossier par run avec le parquet validé, les métadonnées et
-  ``figures/`` (9 graphes SVG numérotés/ordonnés).
+- ``AAAAMMJJHHMM/`` : un dossier par run avec le dataset validé (parquet **et** CSV),
+  les métadonnées et ``figures/`` (9 graphes SVG numérotés/ordonnés).
 
 Usage :
 
@@ -413,6 +413,9 @@ def run_analysis(now: datetime | None = None) -> dict:
 
     parquet_path = run_dir / "telemetry_clean.parquet"
     df.to_parquet(parquet_path, index=False)
+    # Export CSV des données validées (utf-8-sig : lisible sous Excel Windows).
+    csv_path = run_dir / "telemetry_clean.csv"
+    df.to_csv(csv_path, index=False, encoding="utf-8-sig")
     figures = make_figures(df, fig_dir)
 
     metrics = compute_metrics(df, n_doublons)
@@ -421,6 +424,7 @@ def run_analysis(now: datetime | None = None) -> dict:
         "timestamp": now.isoformat(timespec="seconds"),
         "source": "bronze.telemetry",
         "dataset": str(parquet_path),
+        "dataset_csv": str(csv_path),
         "anonymisation_requise": pii["anonymisation_requise"],
         "colonnes_dcp": pii["colonnes_dcp"],
         "figures": figures,
