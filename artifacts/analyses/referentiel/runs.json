@@ -130,5 +130,16 @@
     "n_proactive": 90,
     "n_reactive": 25,
     "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\referentiel\\202606221008"
+  },
+  {
+    "run_id": "202606221017",
+    "timestamp": "2026-06-22T10:17:21",
+    "source": "bronze.machine + bronze.maintenance",
+    "n_machines": 15,
+    "n_maintenances": 115,
+    "n_modeles": 4,
+    "n_proactive": 90,
+    "n_reactive": 25,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\referentiel\\202606221017"
   }
 ]

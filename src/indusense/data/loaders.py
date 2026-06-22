@@ -1,7 +1,8 @@
 """Chargement des artefacts bruts (US 1.1, C1).
 
-Point d'entrée unique pour lire les CSV fournis. L'exploration fine
-(métriques, doublons, features) se fait dans ``notebooks/01_enquete_donnees``.
+Point d'entrée pour lire les CSV bruts (aperçu/acquisition, cf.
+``notebooks/00_acquisition``). L'analyse exploratoire se fait sur ``bronze`` dans
+``notebooks/01_analyse_exploratoire``.
 """
 
 from __future__ import annotations

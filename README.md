@@ -30,7 +30,7 @@ une base de connaissance fiable et un **Gold Dataset** prêt pour l'entraînemen
 ├── src/indusense/          # code source (package)
 │   ├── config.py           # chemins & constantes
 │   └── data/               # un module par User Story
-├── notebooks/              # 01_enquete_donnees.ipynb ...
+├── notebooks/              # 00_acquisition, 01_analyse_exploratoire (silver/gold à venir)
 ├── data/                   # convention Cookiecutter Data Science
 │   ├── raw/                #   ARTEFACTS BRUTS (immuables — ne pas modifier)
 │   │   ├── telemetry.csv
