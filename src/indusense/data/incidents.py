@@ -111,6 +111,36 @@ def compute_confidence(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# --- Contrôle de cohérence des plages horaires (3×8) ------------------------
+def check_shift_coherence(df: pd.DataFrame) -> dict:
+    """Contrôle de cohérence des plages horaires d'équipe (3×8) — diagnostic bronze.
+
+    Les incidents portent à la fois ``time`` (heure) et ``shift`` (équipe). On vérifie,
+    en lecture seule (intra-source), que le label ``shift`` suit une **partition 3×8** :
+    chaque heure relève d'une seule équipe, 3 équipes × 8 h couvrant les 24 h. Signale les
+    incidents dont le ``shift`` contredit l'équipe dominante de leur heure (saisie suspecte).
+    """
+    heure = pd.to_datetime(df["time"], format="%H:%M", errors="coerce").dt.hour
+    obs = df.assign(_heure=heure).dropna(subset=["_heure"])
+    equipe_de_heure = obs.groupby("_heure")["shift"].agg(lambda s: s.mode().iloc[0])
+    incoherents = int((obs["shift"] != obs["_heure"].map(equipe_de_heure)).sum())
+    plages = {sh: sorted(int(h) for h in g["_heure"].unique()) for sh, g in obs.groupby("shift")}
+    tailles = {sh: len(h) for sh, h in plages.items()}
+    heures_couvertes = {h for hs in plages.values() for h in hs}
+    partition_3x8 = (
+        len(plages) == 3
+        and all(t == 8 for t in tailles.values())
+        and len(heures_couvertes) == 24
+    )
+    return {
+        "partition_3x8": bool(partition_3x8),
+        "n_equipes": len(plages),
+        "heures_par_equipe": tailles,
+        "n_incoherents": incoherents,
+        "plages": plages,
+    }
+
+
 # --- Métriques --------------------------------------------------------------
 def compute_metrics(df: pd.DataFrame) -> dict:
     """Métriques de suivi du dataset produit."""
@@ -554,6 +584,15 @@ signal, **aucune contradiction**). Cas particulier : `type_arret_urgence` n'appa
   parfaite). À **exclure des features ML** — l'utiliser serait un **data leakage**
   (le commentaire *est* l'étiquette de la panne).
 
+## Cohérence des plages horaires d'équipe (3×8)
+Les incidents portent à la fois `time` (heure) et `shift` (équipe). `check_shift_coherence`
+vérifie, en lecture seule, que le `shift` suit une **partition 3×8** : 3 équipes × 8 h
+couvrant les 24 h, chaque heure relevant d'une seule équipe. Constat sur les données :
+partition **valide** — matin **06–13**, après-midi **14–21**, nuit **22–05** (8 h chacune),
+**0 incohérence** ; cohérent avec la dérivation horaire de la télémétrie. Contrôle qualité
+**bronze** (intra-source, diagnostic) ; toute correction d'un `shift` erroné relèverait du
+**silver**.
+
 ## Corrélation sévérité ↔ type de panne (choix des tests)
 La sévérité est **ordinale** (1–5) et le type de panne **nominal** (9 catégories,
 multi-étiquette) : Pearson/Spearman ne s'appliquent pas à une variable nominale. On
@@ -616,6 +655,7 @@ def run_ingestion(now: datetime | None = None) -> dict:
         "source": "bronze.incident",
         "dataset": str(parquet_path),
         "dataset_csv": str(csv_path),
+        "coherence_shift": check_shift_coherence(df),
         "figures": figures,
         "colonnes": list(df.columns),
         **metrics,

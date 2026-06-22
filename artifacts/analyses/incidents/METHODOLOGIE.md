@@ -64,6 +64,15 @@ signal, **aucune contradiction**). Cas particulier : `type_arret_urgence` n'appa
   parfaite). À **exclure des features ML** — l'utiliser serait un **data leakage**
   (le commentaire *est* l'étiquette de la panne).
 
+## Cohérence des plages horaires d'équipe (3×8)
+Les incidents portent à la fois `time` (heure) et `shift` (équipe). `check_shift_coherence`
+vérifie, en lecture seule, que le `shift` suit une **partition 3×8** : 3 équipes × 8 h
+couvrant les 24 h, chaque heure relevant d'une seule équipe. Constat sur les données :
+partition **valide** — matin **06–13**, après-midi **14–21**, nuit **22–05** (8 h chacune),
+**0 incohérence** ; cohérent avec la dérivation horaire de la télémétrie. Contrôle qualité
+**bronze** (intra-source, diagnostic) ; toute correction d'un `shift` erroné relèverait du
+**silver**.
+
 ## Corrélation sévérité ↔ type de panne (choix des tests)
 La sévérité est **ordinale** (1–5) et le type de panne **nominal** (9 catégories,
 multi-étiquette) : Pearson/Spearman ne s'appliquent pas à une variable nominale. On

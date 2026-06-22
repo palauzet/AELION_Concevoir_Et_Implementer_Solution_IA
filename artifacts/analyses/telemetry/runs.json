@@ -190,5 +190,17 @@
     "n_nan_total": 2812,
     "n_outliers_total": 3266,
     "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\telemetry\\202606221115"
+  },
+  {
+    "run_id": "202606221123",
+    "timestamp": "2026-06-22T11:23:00",
+    "source": "bronze.telemetry",
+    "n_lignes": 134280,
+    "n_colonnes": 11,
+    "machines_uniques": 15,
+    "n_doublons_supprimes": 1346,
+    "n_nan_total": 2812,
+    "n_outliers_total": 3266,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\telemetry\\202606221123"
   }
 ]

@@ -61,6 +61,25 @@ def test_severity_type_association() -> None:
     assert 0.0 <= assoc["p_kruskal"] <= 1.0
 
 
+def test_check_shift_coherence() -> None:
+    def lbl(h: int) -> str:
+        return "matin" if 6 <= h < 14 else "apres-midi" if 14 <= h < 22 else "nuit"
+
+    base = pd.DataFrame({
+        "time": [f"{h:02d}:00" for h in range(24)],
+        "shift": [lbl(h) for h in range(24)],
+    })
+    rep = ing.check_shift_coherence(base)
+    assert rep["partition_3x8"] is True
+    assert rep["n_incoherents"] == 0
+    assert set(rep["heures_par_equipe"].values()) == {8}
+
+    # Conflit intra-heure (08:00 aussi étiqueté 'nuit') -> incohérence signalée.
+    extra = pd.DataFrame({"time": ["08:00"], "shift": ["nuit"]})
+    rep2 = ing.check_shift_coherence(pd.concat([base, extra], ignore_index=True))
+    assert rep2["n_incoherents"] >= 1
+
+
 def test_machine_association() -> None:
     df = ing.enrich(anonymize_operators(_sample()))
     assoc = ing.machine_association(df)
