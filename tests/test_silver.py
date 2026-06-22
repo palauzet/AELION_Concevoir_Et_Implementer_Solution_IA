@@ -90,6 +90,7 @@ def _bronze_samples() -> dict[str, pd.DataFrame]:
             "maintenance_id": [1], "machine_code": ["MACH-01"],
             "maintenance_at": ["2025-06-01 03:00:00+00"], "maintenance_type": ["reactive"],
             "action_type": ["changement_suite_panne"], "component": ["capteur pression"],
+            "description": ["Intervention corrective après INC-000001"],
             "related_incident_id": ["INC-000001"], "duration_hours": [2.0],
         }),
         "telemetry": telemetry,

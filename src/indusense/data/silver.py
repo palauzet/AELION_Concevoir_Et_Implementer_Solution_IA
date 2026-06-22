@@ -35,12 +35,13 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import seaborn as sns  # noqa: E402
+from sqlalchemy import text  # noqa: E402
 
 from indusense import config  # noqa: E402
 from indusense.data import incidents as inc  # noqa: E402
 from indusense.data import telemetry as tel  # noqa: E402
 from indusense.data.anonymize import anonymize_operators  # noqa: E402
-from indusense.data.db import ensure_schema, get_engine, read_bronze  # noqa: E402
+from indusense.data.db import get_engine, read_bronze  # noqa: E402
 
 SENSORS = list(config.TELEMETRY_SENSORS)
 
@@ -232,10 +233,16 @@ def make_figures(telemetry: pd.DataFrame, metrics: dict, out_dir: Path) -> list[
 
 # --- Persistance + journal + méthodologie -----------------------------------
 def write_silver_tables(tables: dict[str, pd.DataFrame], engine) -> None:
-    """Écrit les tables dans le schéma ``silver`` (remplacement — silver régénérable)."""
-    ensure_schema(engine, config.SCHEMA_SILVER)
+    """Recharge les tables silver (**schéma géré par Alembic**) : TRUNCATE puis append typé.
+
+    Insertion en append dans les tables migrées (types/contraintes garantis). Ordre du dict
+    (machine d'abord) pour respecter les FK ; TRUNCATE … CASCADE pour repartir propre.
+    """
+    qualified = ", ".join(f'"{config.SCHEMA_SILVER}"."{name}"' for name in tables)
+    with engine.begin() as conn:
+        conn.execute(text(f"TRUNCATE {qualified} RESTART IDENTITY CASCADE"))
     for name, df in tables.items():
-        df.to_sql(name, engine, schema=config.SCHEMA_SILVER, if_exists="replace", index=False)
+        df.to_sql(name, engine, schema=config.SCHEMA_SILVER, if_exists="append", index=False)
 
 
 def _render_runs_md(runs: list[dict]) -> str:

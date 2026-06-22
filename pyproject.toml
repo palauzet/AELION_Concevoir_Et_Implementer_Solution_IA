@@ -15,6 +15,7 @@ dependencies = [
     "scipy>=1.14",
     "scikit-learn>=1.5",
     "sqlalchemy>=2.0",
+    "alembic>=1.13",         # migrations / rollback du schéma (US 1.2)
     "psycopg[binary]>=3.2",  # driver PostgreSQL (psycopg 3, binaire embarqué)
     "matplotlib>=3.9",
     "seaborn>=0.13",
@@ -51,6 +52,7 @@ packages = ["src/indusense"]
 line-length = 100
 target-version = "py313"
 src = ["src", "tests"]
+extend-exclude = ["alembic"]  # migrations autogénérées + env Alembic (style propre à Alembic)
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

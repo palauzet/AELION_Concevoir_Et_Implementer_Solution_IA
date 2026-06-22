@@ -47,12 +47,3 @@ def ensure_schema(engine: Engine, schema: str) -> None:
     ident = schema.replace('"', '""')
     with engine.begin() as conn:
         conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{ident}"'))
-
-
-def create_bronze_schema_and_tables(engine: Engine) -> None:
-    """Crée le schéma bronze puis les tables ORM manquantes."""
-    # Import local pour enregistrer les modèles sur Base.metadata.
-    from indusense.data import models  # noqa: F401
-
-    ensure_schema(engine, config.SCHEMA_BRONZE)
-    Base.metadata.create_all(engine)

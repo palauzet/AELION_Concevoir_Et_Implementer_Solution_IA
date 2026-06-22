@@ -22,7 +22,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from indusense import config
-from indusense.data.db import Base, ensure_schema, get_engine
+from indusense.data.db import get_engine
 
 
 @dataclass(frozen=True)
@@ -105,16 +105,15 @@ def load_csv_to_bronze(
 
 
 def setup_bronze(engine: Engine, migrate: bool = False) -> None:
-    """Prépare le schéma bronze : schéma, données de référence, puis tables ORM."""
-    ensure_schema(engine, config.SCHEMA_BRONZE)
+    """Charge les données de référence dans bronze (le **schéma est géré par Alembic**).
+
+    Prérequis : ``uv run alembic upgrade head`` (crée les schémas/tables typés). Ici on ne
+    crée plus de DDL ; ``machine.sql`` (``load_reference_data``) ne fait qu'**insérer** les
+    données (ses ``CREATE TABLE IF NOT EXISTS`` sont des no-op, tables déjà créées).
+    """
     if migrate:
         load_reference_data(engine)
         print("Données de référence (machine, maintenance) chargées dans bronze.")
-    # Importe les modèles pour les enregistrer sur Base.metadata, puis crée
-    # les tables manquantes (telemetry, incident ; machine/maintenance déjà là).
-    from indusense.data import models  # noqa: F401
-
-    Base.metadata.create_all(engine)
 
 
 def main(argv: list[str] | None = None) -> None:

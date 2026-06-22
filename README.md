@@ -77,6 +77,22 @@ uv run jupyter lab
 > Première installation de `uv` (si absent du poste) :
 > `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
 
+### Base de données (médaillon PostgreSQL)
+
+Le **schéma** (tables typées des schémas `bronze` / `silver`) est géré par **Alembic**
+(migrations + rollback, US 1.2) ; les **données** sont chargées en pandas. Avec la base
+démarrée (`docker compose -f docker/pgdocker/docker-compose.yml up -d`) :
+
+```powershell
+uv run alembic upgrade head        # crée/migre le schéma (downgrade -1 / base = rollback)
+uv run indusense-ingest --migrate  # raw -> bronze (référentiel + CSV)
+uv run indusense-silver            # bronze -> silver (nettoyage, enrichissement)
+# analyses : indusense-incidents / -telemetry / -referentiel ; contrat de schéma : indusense-schema
+```
+
+Les modèles ORM (`src/indusense/data/models/`, par couche) sont la **source de vérité du
+schéma** ; `data/raw/machine.sql` (immuable) ne fait qu'insérer les données de référence.
+
 ## Stack (Sprint 01)
 
 pandas · numpy · scipy · scikit-learn · SQLAlchemy · matplotlib · seaborn ·
