@@ -36,6 +36,16 @@ def test_impute_maintenance_aware() -> None:
     assert bool(out.loc[4, "temperature_c_was_imputed"]) is False
 
 
+def test_build_component_and_mapping() -> None:
+    mt = _bronze_samples()["maintenance"]
+    comp = silver.build_component(mt)
+    assert list(comp.columns) == ["component_id", "name"]
+    assert comp["component_id"].is_unique and comp["name"].is_unique
+    mapped = silver.build_maintenance(mt, comp)
+    assert "component" not in mapped.columns and "component_id" in mapped.columns
+    assert mapped["component_id"].isin(comp["component_id"]).all()  # FK valide
+
+
 def test_flag_outliers() -> None:
     df = _telemetry_with_flags().copy()
     df.loc[0, "pressure_bar"] = 10_000.0  # valeur extrême
@@ -113,18 +123,21 @@ def test_run_smoke(tmp_path, monkeypatch) -> None:
 
     meta = silver.run()
     run_dir = tmp_path / meta["run_id"]
-    for name in ("machine", "maintenance", "telemetry", "incident"):
+    for name in ("machine", "component", "maintenance", "telemetry", "incident"):
         assert (run_dir / f"{name}.parquet").exists()
     tel = pd.read_parquet(run_dir / "telemetry.parquet")
     assert meta["telemetry"]["n_doublons_supprimes"] == 1  # doublon retiré
-    assert {"during_maintenance", "temperature_c_was_imputed", "temperature_c_is_outlier",
-            "model", "criticality"} <= set(tel.columns)
+    assert {"during_maintenance", "temperature_c_was_imputed",
+            "temperature_c_is_outlier"} <= set(tel.columns)
+    assert {"model", "criticality"}.isdisjoint(tel.columns)  # dims non copiées (normalisé)
     incident = pd.read_parquet(run_dir / "incident.parquet")
     assert "operator_name" not in incident.columns  # anonymisé
-    assert "model" in incident.columns
+    assert {"model", "criticality"}.isdisjoint(incident.columns)
     maintenance = pd.read_parquet(run_dir / "maintenance.parquet")
-    assert "action_type" not in maintenance.columns  # retiré (redondant)
-    assert "created_at" not in maintenance.columns  # audit retiré
+    assert "component_id" in maintenance.columns  # lookup normalisé
+    assert {"component", "action_type", "model", "criticality", "created_at"}.isdisjoint(
+        maintenance.columns
+    )
     assert (run_dir / "figures").is_dir()
 
     # Dates uniformisées : datetime64 naïf (sans fuseau) partout ; incident fusionné.

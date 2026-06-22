@@ -10,7 +10,8 @@ from tests.test_silver import _bronze_samples
 def test_metadata_has_all_tables() -> None:
     assert set(models.Base.metadata.tables) == {
         "bronze.machine", "bronze.maintenance", "bronze.telemetry", "bronze.incident",
-        "silver.machine", "silver.maintenance", "silver.telemetry", "silver.incident",
+        "silver.machine", "silver.component", "silver.maintenance", "silver.telemetry",
+        "silver.incident",
     }
 
 
@@ -19,9 +20,12 @@ def test_silver_models_match_builders(monkeypatch) -> None:
     samples = _bronze_samples()
     monkeypatch.setattr(silver, "read_bronze", lambda table: samples[table].copy())
 
+    mtb = samples["maintenance"]
+    component = silver.build_component(mtb)
     pairs = [
         (silver_models.SilverMachine, silver.build_machine()),
-        (silver_models.SilverMaintenance, silver.build_maintenance()),
+        (silver_models.SilverComponent, component),
+        (silver_models.SilverMaintenance, silver.build_maintenance(mtb, component)),
         (silver_models.SilverIncident, silver.build_incident()),
         (silver_models.SilverTelemetry, silver.build_telemetry()[0]),
     ]

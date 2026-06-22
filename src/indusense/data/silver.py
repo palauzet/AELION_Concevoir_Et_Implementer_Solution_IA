@@ -55,11 +55,7 @@ def _naive_utc(s: pd.Series) -> pd.Series:
     return pd.to_datetime(s, utc=True).dt.tz_localize(None)
 
 
-# --- Dimension machine (réutilisée pour l'enrichissement) -------------------
-def _machine_dim() -> pd.DataFrame:
-    return read_bronze("machine")[["machine_code", "model", "criticality"]]
-
-
+# --- Dimension machine (porte model/criticality — star-schema) --------------
 def build_machine() -> pd.DataFrame:
     """Dimension machine conformée : dates uniformes, sans audit, + capacité dérivée."""
     m = read_bronze("machine").drop(columns=AUDIT_COLS, errors="ignore").copy()
@@ -70,14 +66,24 @@ def build_machine() -> pd.DataFrame:
     return m
 
 
-def build_maintenance() -> pd.DataFrame:
-    """Maintenance conformée : retire `action_type`/audit, date uniforme, enrichie."""
-    mt = read_bronze("maintenance").drop(
-        columns=["action_type", *AUDIT_COLS], errors="ignore"
-    ).copy()
+# --- Lookup composant + maintenance (normalisés) ----------------------------
+def build_component(maintenance: pd.DataFrame) -> pd.DataFrame:
+    """Table de lookup des composants : ``component_id`` (déterministe) + ``name``."""
+    noms = sorted(maintenance["component"].dropna().unique())
+    return pd.DataFrame({"component_id": range(1, len(noms) + 1), "name": noms})
+
+
+def build_maintenance(maintenance: pd.DataFrame, component_dim: pd.DataFrame) -> pd.DataFrame:
+    """Maintenance normalisée : ``component`` -> ``component_id`` (FK) ; retire model/criticality.
+
+    ``model``/``criticality`` ne sont plus dupliqués ici (dimension machine, jointure FK).
+    """
+    mt = maintenance.drop(columns=["action_type", *AUDIT_COLS], errors="ignore").copy()
     mt["duration_hours"] = mt["duration_hours"].astype(float)
     mt["maintenance_at"] = _naive_utc(mt["maintenance_at"])
-    return mt.merge(_machine_dim(), on="machine_code", how="left")
+    mapping = dict(zip(component_dim["name"], component_dim["component_id"], strict=True))
+    mt["component_id"] = mt["component"].map(mapping)
+    return mt.drop(columns=["component"])
 
 
 # --- Télémétrie : fenêtres de maintenance + segments ------------------------
@@ -156,8 +162,7 @@ def build_telemetry() -> tuple[pd.DataFrame, dict]:
     df = _flag_and_segment(df, windows)
     df = impute_telemetry(df)
     df = flag_outliers(df)
-    df = df.merge(_machine_dim(), left_on="machine_id", right_on="machine_code", how="left")
-    df = df.drop(columns=["machine_code", "_segment"])
+    df = df.drop(columns=["_segment"])  # machine_id = FK vers silver.machine (pas de copie dim)
     metrics = {
         "n_lignes": int(len(df)),
         "n_doublons_supprimes": int(n_doublons),
@@ -172,19 +177,15 @@ def build_telemetry() -> tuple[pd.DataFrame, dict]:
 def build_incident() -> pd.DataFrame:
     """Construit ``silver.incident`` : anonymisé, enrichi, **dates uniformisées**.
 
-    La date et l'heure (colonnes séparées `date` + chaîne `time`) sont fusionnées en un
-    **`timestamp`** canonique (datetime64 naïf), cohérent avec la télémétrie et la
-    maintenance ; les colonnes source redondantes sont retirées.
+    ``date`` + chaîne ``time`` fusionnées en un **``timestamp``** canonique (datetime64 naïf).
+    ``machine_id`` = FK vers ``silver.machine`` (model/criticality récupérés par jointure).
     """
     df = read_bronze("incident").drop(columns=["incident_pk"], errors="ignore")
     df = inc.compute_confidence(inc.enrich(anonymize_operators(df)))
     df = df.rename(columns={"dt": "timestamp"})
     df["timestamp"] = _naive_utc(df["timestamp"])
     df["jour"] = _naive_utc(df["jour"])
-    df = df.drop(columns=["date", "time"], errors="ignore")
-    return df.merge(_machine_dim(), left_on="machine_id", right_on="machine_code", how="left").drop(
-        columns=["machine_code"]
-    )
+    return df.drop(columns=["date", "time"], errors="ignore")
 
 
 # --- Figures (viewers US 1.3) -----------------------------------------------
@@ -297,7 +298,16 @@ Couche **nettoyée, conformée, intégrée** entre bronze (fidèle à la source)
    et on ne ponte pas le reset (sinon contamination du signal de dégradation, cible ML).
 4. **Flag outliers (IQR)** : `*_is_outlier`, valeurs **conservées** — en maintenance
    prédictive un outlier peut être l'anomalie annonciatrice ; le tri se fera au gold.
-5. **Enrichissement** : jointure dimension machine → `model`, `criticality`.
+5. **FK machine** : `machine_id` référence `silver.machine` (model/criticality récupérés par
+   jointure, non copiés).
+
+## Normalisation (mesurée, star-schema)
+`model` et `criticality` ne sont **pas dupliqués** dans les faits : ils vivent dans la
+dimension `silver.machine` et se récupèrent par **jointure** (`machine_id`/`machine_code`).
+`component` est une **table de lookup** `silver.component` (FK `maintenance.component_id`).
+Les enums (`criticality`, `maintenance_type`) sont contraints par **CHECK** (pas de table).
+Choix *mesuré* : on retire la redondance et on pose les FK, sans 3NF stricte (jointures
+minimisées pour le ML) ; les capteurs restent en **format large**.
 
 ## Dates uniformisées (conformance)
 Le bronze est hétérogène (incidents `date` + chaîne `time` ; télémétrie naïve ; maintenance
@@ -307,11 +317,13 @@ tz-aware). En silver, **toutes les dates/datetimes sont conformées en `datetime
 (`created_at`/`updated_at`, non analytiques). Format unique aval : `YYYY-MM-DD HH:MM:SS`.
 
 ## Autres tables
-- **incident** : anonymisé (`operator_*` supprimés), signal/confiance + axes temporels,
-  enrichi `model`/`criticality`.
-- **machine** : dimension conformée (+ `heures_equivalentes_jour` ≈ 16, flag
-  `capacite_incoherente`).
-- **maintenance** : `action_type` retiré (redondant avec `maintenance_type`), enrichie.
+- **incident** : anonymisé (`operator_*` supprimés), signal/confiance + axes temporels ;
+  `machine_id` = FK vers la dimension machine.
+- **machine** : dimension (porte `model`/`criticality`) conformée (+ `heures_equivalentes_jour`
+  ≈ 16, flag `capacite_incoherente`, CHECK criticité).
+- **component** : lookup des composants (`component_id`, `name`).
+- **maintenance** : `action_type`/`model`/`criticality` retirés ; `component` → `component_id`
+  (FK lookup) ; CHECK `maintenance_type`.
 
 ## Reporté au gold
 Usage des fenêtres de maintenance (exclusion de l'entraînement et/ou features
@@ -330,11 +342,15 @@ def run(now: datetime | None = None) -> dict:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     machine = build_machine()
-    maintenance = build_maintenance()
+    maintenance_bronze = read_bronze("maintenance")
+    component = build_component(maintenance_bronze)
+    maintenance = build_maintenance(maintenance_bronze, component)
     telemetry, tel_metrics = build_telemetry()
     incident = build_incident()
+    # Ordre = FK : machine + component avant maintenance ; machine avant telemetry/incident.
     tables = {
         "machine": machine,
+        "component": component,
         "maintenance": maintenance,
         "telemetry": telemetry,
         "incident": incident,
@@ -354,6 +370,7 @@ def run(now: datetime | None = None) -> dict:
         "n_incidents": int(len(incident)),
         "n_machines": int(len(machine)),
         "n_maintenances": int(len(maintenance)),
+        "n_composants": int(len(component)),
         "figures": figures,
         "chemin": str(run_dir),
     }
@@ -379,7 +396,7 @@ def main(argv: list[str] | None = None) -> None:
         f"NaN résiduels={t['n_nan_residuels']})"
     )
     print(f"  incident: {meta['n_incidents']} | machine: {meta['n_machines']} | "
-          f"maintenance: {meta['n_maintenances']}")
+          f"maintenance: {meta['n_maintenances']} | composants: {meta['n_composants']}")
     print(f"  {len(meta['figures'])} figures ; tables écrites dans le schéma "
           f"'{config.SCHEMA_SILVER}'.")
 

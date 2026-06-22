@@ -7,6 +7,7 @@ from __future__ import annotations
 from indusense.data.db import Base
 from indusense.data.models.bronze import Incident, Machine, Maintenance, Telemetry
 from indusense.data.models.silver import (
+    SilverComponent,
     SilverIncident,
     SilverMachine,
     SilverMaintenance,
@@ -19,6 +20,7 @@ __all__ = [
     "Machine",
     "Maintenance",
     "Telemetry",
+    "SilverComponent",
     "SilverIncident",
     "SilverMachine",
     "SilverMaintenance",
