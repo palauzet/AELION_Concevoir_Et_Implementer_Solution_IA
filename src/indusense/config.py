@@ -38,6 +38,10 @@ RAW_MACHINE_SQL = DATA_RAW / "machine.sql"
 # Gold Dataset final (US 1.5).
 GOLD_DATASET = DATA_PROCESSED / "gold_dataset.parquet"
 
+# Rapports & contrat de schéma (structure des données brutes, versionné).
+REPORTS_DIR = PROJECT_ROOT / "reports"
+SCHEMA_REFERENCE = REPORTS_DIR / "schema_reference.json"
+
 # --- Artefacts d'ingestion (runs horodatés, versionnés) ---------------------
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 ANALYSE_INCIDENTS_DIR = ARTIFACTS_DIR / "analyses" / "incidents"

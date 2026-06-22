@@ -10,9 +10,10 @@ DCP éventuel). Aucune transformation d'anonymisation n'est donc appliquée.
 
 ## Dédoublonnage
 Clé métier d'unicité : **`(machine_id, timestamp)`** (un relevé par machine et par
-heure). `deduplicate` retire les doublons de clé (conservation de la 1re occurrence)
-et reporte le nombre supprimé — opération **idempotente**. Sur les données fournies :
-**0 doublon**, grille horaire complète (15 machines × 8 952 h), 0 NaN.
+heure). `deduplicate` retire les doublons de clé (conservation de la 1re occurrence) et
+reporte le nombre supprimé — opération **idempotente**. Le compte effectif (doublons
+retirés, NaN restants) figure dans le journal des runs et les métadonnées du run, pour
+rester juste quelle que soit la version des données.
 
 ## Détection des outliers
 Méthode **IQR (Tukey)** par variable : sont marquées extrêmes les valeurs hors de

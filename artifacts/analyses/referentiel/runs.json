@@ -141,5 +141,27 @@
     "n_proactive": 90,
     "n_reactive": 25,
     "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\referentiel\\202606221017"
+  },
+  {
+    "run_id": "202606221043",
+    "timestamp": "2026-06-22T10:43:26",
+    "source": "bronze.machine + bronze.maintenance",
+    "n_machines": 15,
+    "n_maintenances": 1562,
+    "n_modeles": 4,
+    "n_proactive": 90,
+    "n_reactive": 1472,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\referentiel\\202606221043"
+  },
+  {
+    "run_id": "202606221047",
+    "timestamp": "2026-06-22T10:47:06",
+    "source": "bronze.machine + bronze.maintenance",
+    "n_machines": 15,
+    "n_maintenances": 1562,
+    "n_modeles": 4,
+    "n_proactive": 90,
+    "n_reactive": 1472,
+    "chemin": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\artifacts\\analyses\\referentiel\\202606221047"
   }
 ]

@@ -1,0 +1,217 @@
+{
+  "telemetry": {
+    "source": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\data\\raw\\telemetry.csv",
+    "n_rows": 135626,
+    "columns": {
+      "machine_id": {
+        "type": "str",
+        "non_null": 135626,
+        "n_unique": 15
+      },
+      "timestamp": {
+        "type": "str",
+        "non_null": 135626,
+        "n_unique": 8952
+      },
+      "temperature_c": {
+        "type": "float64",
+        "non_null": 134732,
+        "n_unique": 18312
+      },
+      "pressure_bar": {
+        "type": "float64",
+        "non_null": 134631,
+        "n_unique": 10708
+      },
+      "voltage_mean_v": {
+        "type": "float64",
+        "non_null": 135626,
+        "n_unique": 4392
+      },
+      "rotation_mean_rpm": {
+        "type": "float64",
+        "non_null": 134668,
+        "n_unique": 27474
+      },
+      "pieces_produced": {
+        "type": "int64",
+        "non_null": 135626,
+        "n_unique": 115
+      }
+    }
+  },
+  "incidents": {
+    "source": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\data\\raw\\releves_incidents.csv",
+    "n_rows": 1245,
+    "columns": {
+      "incident_id": {
+        "type": "str",
+        "non_null": 1245,
+        "n_unique": 1245
+      },
+      "date": {
+        "type": "str",
+        "non_null": 1245,
+        "n_unique": 353
+      },
+      "time": {
+        "type": "str",
+        "non_null": 1245,
+        "n_unique": 620
+      },
+      "operator_name": {
+        "type": "str",
+        "non_null": 1245,
+        "n_unique": 15
+      },
+      "machine_id": {
+        "type": "str",
+        "non_null": 1245,
+        "n_unique": 15
+      },
+      "severity": {
+        "type": "int64",
+        "non_null": 1245,
+        "n_unique": 4
+      },
+      "operator_badge": {
+        "type": "str",
+        "non_null": 1245,
+        "n_unique": 10
+      },
+      "comment": {
+        "type": "str",
+        "non_null": 1245,
+        "n_unique": 46
+      },
+      "shift": {
+        "type": "str",
+        "non_null": 1245,
+        "n_unique": 3
+      },
+      "type_surchauffe": {
+        "type": "int64",
+        "non_null": 1245,
+        "n_unique": 2
+      },
+      "type_baisse_pression": {
+        "type": "int64",
+        "non_null": 1245,
+        "n_unique": 2
+      },
+      "type_vibration": {
+        "type": "int64",
+        "non_null": 1245,
+        "n_unique": 2
+      },
+      "type_bruit_mecanique": {
+        "type": "int64",
+        "non_null": 1245,
+        "n_unique": 2
+      },
+      "type_surconsommation": {
+        "type": "int64",
+        "non_null": 1245,
+        "n_unique": 2
+      },
+      "type_blocage_mecanique": {
+        "type": "int64",
+        "non_null": 1245,
+        "n_unique": 2
+      },
+      "type_alarme_capteur": {
+        "type": "int64",
+        "non_null": 1245,
+        "n_unique": 2
+      },
+      "type_arret_urgence": {
+        "type": "int64",
+        "non_null": 1245,
+        "n_unique": 2
+      },
+      "type_defaut_qualite": {
+        "type": "int64",
+        "non_null": 1245,
+        "n_unique": 2
+      }
+    }
+  },
+  "machine": {
+    "source": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\data\\raw\\machine.sql",
+    "n_rows": null,
+    "columns": {
+      "machine_code": {
+        "type": "VARCHAR(16)"
+      },
+      "commissioning_date": {
+        "type": "DATE"
+      },
+      "max_daily_capacity": {
+        "type": "INTEGER"
+      },
+      "max_hourly_capacity_pieces": {
+        "type": "INTEGER"
+      },
+      "model": {
+        "type": "VARCHAR(32)"
+      },
+      "production_line": {
+        "type": "VARCHAR(16)"
+      },
+      "location": {
+        "type": "VARCHAR(16)"
+      },
+      "criticality": {
+        "type": "VARCHAR(8)"
+      },
+      "is_active": {
+        "type": "BOOLEAN"
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ"
+      },
+      "updated_at": {
+        "type": "TIMESTAMPTZ"
+      }
+    }
+  },
+  "maintenance": {
+    "source": "D:\\ProjetsIA\\AELION_Concevoir_Et_Implementer_Solution_IA\\data\\raw\\machine.sql",
+    "n_rows": null,
+    "columns": {
+      "maintenance_id": {
+        "type": "INTEGER"
+      },
+      "machine_code": {
+        "type": "VARCHAR(16)"
+      },
+      "maintenance_at": {
+        "type": "TIMESTAMPTZ"
+      },
+      "maintenance_type": {
+        "type": "VARCHAR(16)"
+      },
+      "action_type": {
+        "type": "VARCHAR(32)"
+      },
+      "component": {
+        "type": "VARCHAR(64)"
+      },
+      "description": {
+        "type": "TEXT"
+      },
+      "related_incident_id": {
+        "type": "VARCHAR(16)"
+      },
+      "duration_hours": {
+        "type": "NUMERIC(6,2)"
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ"
+      },
+      "updated_at": {
+        "type": "TIMESTAMPTZ"
+      }
+    }
+  }
+}
