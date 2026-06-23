@@ -108,7 +108,11 @@ def add_dynamic_features(df: pd.DataFrame) -> pd.DataFrame:
     garantit qu'aucune fenêtre ne franchit une maintenance (respect du reset).
     """
     df = df.sort_values([*GROUP, "timestamp"]).reset_index(drop=True)
-    df["__t_h"] = df["timestamp"].astype("int64") / 3.6e12  # ns -> heures
+    # Heures écoulées depuis le début du segment : robuste à la résolution datetime
+    # (us/ns) et bien conditionné pour la pente (petits ``t``, pas d'annulation).
+    df["__t_h"] = df.groupby(GROUP)["timestamp"].transform(
+        lambda s: (s - s.min()) / np.timedelta64(1, "h")
+    )
     df["__t2"] = df["__t_h"] ** 2
     for s in SENSORS:
         df[f"__ty_{s}"] = df["__t_h"] * df[s]
@@ -170,16 +174,23 @@ def add_production_features(df: pd.DataFrame) -> pd.DataFrame:
 def add_history_features(
     df: pd.DataFrame, maintenance: pd.DataFrame, incident: pd.DataFrame
 ) -> pd.DataFrame:
-    """``time_since_last_*`` et comptages glissants d'événements **strictement passés**."""
+    """``time_since_last_*`` et comptages glissants d'événements **strictement passés**.
+
+    ``time_since_last_maintenance_h`` est mesuré depuis la **reprise** (fin de maintenance =
+    ``maintenance_at + duration_hours``), donc ≈ temps de fonctionnement depuis la remise en
+    service (n'inclut pas la durée d'immobilisation).
+    """
     df = df.copy()
     for col in ("time_since_last_maintenance_h", "time_since_last_incident_h"):
         df[col] = np.nan
     for col in ("n_incidents_7d", "n_incidents_30d", "n_maintenance_30d"):
         df[col] = 0
-    maint = {
-        pk: np.sort(g["maintenance_at"].to_numpy())
-        for pk, g in maintenance.groupby("machine_pk")
-    }
+    maint = {}  # par machine : (débuts triés, fins = début + durée)
+    for pk, g in maintenance.groupby("machine_pk"):
+        g = g.sort_values("maintenance_at")
+        starts = g["maintenance_at"].to_numpy()
+        ends = starts + pd.to_timedelta(g["duration_hours"].to_numpy(), unit="h").to_numpy()
+        maint[pk] = (starts, ends)
     inc = {
         pk: np.sort(g["timestamp"].to_numpy())
         for pk, g in incident.dropna(subset=["machine_pk"]).groupby("machine_pk")
@@ -192,15 +203,19 @@ def add_history_features(
     for pk, idx in df.groupby("machine_pk").groups.items():
         t = df.loc[idx, "timestamp"].to_numpy()
         rows = df.index.get_indexer(idx)
-        m = maint.get(pk, np.array([], dtype="datetime64[ns]"))
-        if len(m):
-            prev = np.searchsorted(m, t, side="right") - 1  # dernière maintenance <= t
+        m = maint.get(pk)
+        if m is not None:
+            starts, ends = m
+            prev = np.searchsorted(starts, t, side="right") - 1  # dernière maintenance débutée <= t
             ok = prev >= 0
             tsl = np.full(len(t), np.nan)
-            tsl[ok] = (t[ok] - m[prev[ok]]) / np.timedelta64(1, "h")
+            # Mesuré depuis la REPRISE (fin de maintenance = début + durée), pas le début.
+            # max(0, .) : sécurité contre un écart négatif au bord d'une fenêtre.
+            tsl[ok] = np.maximum(0.0, (t[ok] - ends[prev[ok]]) / np.timedelta64(1, "h"))
             df.iloc[rows, cols["time_since_last_maintenance_h"]] = tsl
             df.iloc[rows, cols["n_maintenance_30d"]] = (
-                np.searchsorted(m, t, side="left") - np.searchsorted(m, t - H30, side="left")
+                np.searchsorted(starts, t, side="left")
+                - np.searchsorted(starts, t - H30, side="left")
             )
         i = inc.get(pk, np.array([], dtype="datetime64[ns]"))
         if len(i):
@@ -424,8 +439,9 @@ Dataset **ML de maintenance prédictive** : matrice features + labels, 1 ligne p
   **6/12/24/48 h**, *trailing strict* et **bornées au segment inter-maintenance** (jamais de
   franchissement d'une maintenance → on ne ponte pas le reset machine).
 - **Qualité** : compteurs glissants `n_imputed/outlier/saturated` (flags silver).
-- **Historique** : `time_since_last_maintenance/incident`, `n_incidents_7d/30d`,
-  `n_maintenance_30d` (événements **strictement passés**).
+- **Historique** : `time_since_last_maintenance_h` (depuis la **reprise** = fin de
+  maintenance), `time_since_last_incident_h`, `n_incidents_7d/30d`, `n_maintenance_30d`
+  (événements **strictement passés**).
 - **Production/charge** : rolling 24h, cumul depuis maintenance, `utilisation` (vs capacité).
 - **Machine** (dimension) : modèle, criticité, âge, ligne, atelier, capacité.
 - **Temporel cyclique** : `hour/dow` en sin/cos, `shift`.

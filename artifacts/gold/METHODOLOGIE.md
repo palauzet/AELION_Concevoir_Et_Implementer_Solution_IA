@@ -16,8 +16,9 @@ Dataset **ML de maintenance prédictive** : matrice features + labels, 1 ligne p
   **6/12/24/48 h**, *trailing strict* et **bornées au segment inter-maintenance** (jamais de
   franchissement d'une maintenance → on ne ponte pas le reset machine).
 - **Qualité** : compteurs glissants `n_imputed/outlier/saturated` (flags silver).
-- **Historique** : `time_since_last_maintenance/incident`, `n_incidents_7d/30d`,
-  `n_maintenance_30d` (événements **strictement passés**).
+- **Historique** : `time_since_last_maintenance_h` (depuis la **reprise** = fin de
+  maintenance), `time_since_last_incident_h`, `n_incidents_7d/30d`, `n_maintenance_30d`
+  (événements **strictement passés**).
 - **Production/charge** : rolling 24h, cumul depuis maintenance, `utilisation` (vs capacité).
 - **Machine** (dimension) : modèle, criticité, âge, ligne, atelier, capacité.
 - **Temporel cyclique** : `hour/dow` en sin/cos, `shift`.

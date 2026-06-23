@@ -44,9 +44,25 @@ def test_dynamic_features_segment_aware_et_trailing() -> None:
     assert out.loc[5, "temperature_c_mean_48h"] == 110.0  # moyenne 100/110/120
     # Trailing strict : la 1re ligne n'utilise aucune valeur future.
     assert out.loc[0, "temperature_c_mean_6h"] == 10.0
-    # Pente positive estimée sur le segment 1 (≈ +10/h).
-    assert out.loc[5, "temperature_c_slope_48h"] > 0
+    # Pente en °C/heure (rampe +10/h sur le segment 1) — verrouille l'échelle (pas ×1000).
+    assert abs(out.loc[5, "temperature_c_slope_48h"] - 10.0) < 1e-6
+    # Cold-start : 1re ligne d'un segment -> std NaN, pente 0 (indéfinies à 1 point).
+    assert pd.isna(out.loc[0, "temperature_c_std_6h"])
+    assert out.loc[3, "temperature_c_slope_48h"] == 0.0
     assert {f"temperature_c_std_{w}h" for w in config.ROLLING_WINDOWS} <= set(out.columns)
+
+
+def test_time_since_maintenance_depuis_reprise() -> None:
+    """``time_since_last_maintenance_h`` se mesure depuis la FIN (reprise), pas le début."""
+    df = pd.DataFrame({"machine_pk": [1], "timestamp": [pd.Timestamp("2025-01-01 06:00")]})
+    maintenance = pd.DataFrame({"machine_pk": [1],
+                                "maintenance_at": [pd.Timestamp("2025-01-01 02:00")],
+                                "duration_hours": [2.0]})  # fin = 04:00
+    incident = pd.DataFrame({"machine_pk": pd.Series([], dtype="int64"),
+                             "timestamp": pd.Series([], dtype="datetime64[ns]")})
+    out = gold.add_history_features(df, maintenance, incident)
+    # 06:00 − fin(04:00) = 2 h (et non 4 h depuis le début 02:00).
+    assert out.loc[0, "time_since_last_maintenance_h"] == 2.0
 
 
 def test_assign_split_chronologique() -> None:
