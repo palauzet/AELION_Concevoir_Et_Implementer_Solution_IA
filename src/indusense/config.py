@@ -48,7 +48,13 @@ ANALYSE_INCIDENTS_DIR = ARTIFACTS_DIR / "analyses" / "incidents"
 ANALYSE_TELEMETRY_DIR = ARTIFACTS_DIR / "analyses" / "telemetry"
 ANALYSE_REFERENTIEL_DIR = ARTIFACTS_DIR / "analyses" / "referentiel"
 SILVER_DIR = ARTIFACTS_DIR / "silver"
+GOLD_DIR = ARTIFACTS_DIR / "gold"
 RUN_TS_FORMAT = "%Y%m%d%H%M"  # dossier de run : AAAAMMJJHHMM
+
+# Fenêtres glissantes (heures) des features de dynamique/dégradation du gold, et horizons
+# (heures) des labels « incident à venir ». Alignés volontairement (cf. décision projet).
+ROLLING_WINDOWS = (6, 12, 24, 48)
+LABEL_HORIZONS = (6, 12, 24, 48)
 
 # Mesures capteurs de la télémétrie (ordre stable pour les figures/corrélations).
 # `pieces_produced` est traité à part comme variable de production (sortie machine).

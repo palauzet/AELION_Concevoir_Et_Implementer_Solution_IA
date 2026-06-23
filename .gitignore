@@ -21,6 +21,7 @@ artifacts/analyses/incidents/*/
 artifacts/analyses/telemetry/*/
 artifacts/analyses/referentiel/*/
 artifacts/silver/*/
+artifacts/gold/*/
 
 # Notebooks
 .ipynb_checkpoints/
