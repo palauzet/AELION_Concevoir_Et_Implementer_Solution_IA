@@ -1,0 +1,67 @@
+[
+  {
+    "run_id": "202607061452",
+    "horizon": 24,
+    "winner": "xgboost",
+    "pr_auc_test": 0.4495,
+    "roc_auc_test": 0.7098,
+    "threshold": 0.5,
+    "split": {
+      "train": 91389,
+      "val": 19571,
+      "test": 19653
+    }
+  },
+  {
+    "run_id": "202607061459",
+    "horizon": 24,
+    "winner": "xgboost",
+    "pr_auc_test": 0.4495,
+    "roc_auc_test": 0.7098,
+    "threshold": 0.5,
+    "split": {
+      "train": 91389,
+      "val": 19571,
+      "test": 19653
+    }
+  },
+  {
+    "run_id": "202607061514",
+    "horizon": 24,
+    "winner": "xgboost",
+    "pr_auc_test": 0.4495,
+    "roc_auc_test": 0.7098,
+    "threshold": 0.5,
+    "split": {
+      "train": 91389,
+      "val": 19571,
+      "test": 19653
+    }
+  },
+  {
+    "run_id": "202607061527",
+    "horizon": 24,
+    "winner": "xgboost",
+    "pr_auc_test": 0.4495,
+    "roc_auc_test": 0.7098,
+    "threshold": 0.5,
+    "split": {
+      "train": 91389,
+      "val": 19571,
+      "test": 19653
+    }
+  },
+  {
+    "run_id": "202607061531",
+    "horizon": 24,
+    "winner": "xgboost",
+    "pr_auc_test": 0.4495,
+    "roc_auc_test": 0.7098,
+    "threshold": 0.5,
+    "split": {
+      "train": 91389,
+      "val": 19571,
+      "test": 19653
+    }
+  }
+]

@@ -21,6 +21,8 @@ dependencies = [
     "seaborn>=0.13",
     "pyarrow>=17.0",      # Gold Dataset au format parquet
     "python-dotenv>=1.0",
+    "mlflow>=2.15",   # tracking des runs d'entraînement (backend SQLite local)
+    "xgboost>=2.1",   # gradient boosting — modèle principal du POC ML
 ]
 
 [project.scripts]
@@ -31,6 +33,7 @@ indusense-referentiel = "indusense.data.referentiel:main"
 indusense-schema = "indusense.data.schema:main"
 indusense-silver = "indusense.data.silver:main"
 indusense-gold = "indusense.data.gold:main"
+indusense-train = "indusense.ml.training:main"
 
 [dependency-groups]
 # Outillage de dev — installé via `uv sync` (groupe activé par défaut).

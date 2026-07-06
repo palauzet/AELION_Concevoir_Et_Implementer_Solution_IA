@@ -49,7 +49,15 @@ ANALYSE_TELEMETRY_DIR = ARTIFACTS_DIR / "analyses" / "telemetry"
 ANALYSE_REFERENTIEL_DIR = ARTIFACTS_DIR / "analyses" / "referentiel"
 SILVER_DIR = ARTIFACTS_DIR / "silver"
 GOLD_DIR = ARTIFACTS_DIR / "gold"
+ML_DIR = ARTIFACTS_DIR / "ml"
 RUN_TS_FORMAT = "%Y%m%d%H%M"  # dossier de run : AAAAMMJJHHMM
+
+# --- Entraînement ML (B5) ----------------------------------------------------
+# Tracking MLflow local (backend SQLite, non versionné — cf. .gitignore).
+MLFLOW_TRACKING_URI = f"sqlite:///{(ML_DIR / 'mlflow.db').as_posix()}"
+MLFLOW_EXPERIMENT = "indusense-maintenance-ml"
+ML_DEFAULT_HORIZON = 24  # horizon par défaut (h) — cf. LABEL_HORIZONS
+ML_DECISION_THRESHOLD = 0.5  # seuil de décision par défaut (choix motivé -> B7)
 
 # Fenêtres glissantes (heures) des features de dynamique/dégradation du gold, et horizons
 # (heures) des labels « incident à venir ». Alignés volontairement (cf. décision projet).

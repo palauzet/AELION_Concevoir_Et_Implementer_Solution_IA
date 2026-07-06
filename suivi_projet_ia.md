@@ -94,13 +94,13 @@
 
 **Objectif** : poser une référence et un protocole reproductible.
 
-- [ ] Définir les splits train/test/val reproductibles (seeds)
-- [ ] Entraîner une baseline simple
-- [ ] Fixer le protocole d'évaluation offline et les métriques de référence
+- [x] Définir les splits train/test/val reproductibles (seeds)
+- [x] Entraîner une baseline simple
+- [x] Fixer le protocole d'évaluation offline et les métriques de référence
 
 🔧 **Technos / outils** : **split train/test/val** · **seeds / artefacts** · **baseline metrics**
-📦 **Artefacts** : baseline · protocole d'évaluation
-**Statut** : _____
+📦 **Artefacts** : baseline ([`src/indusense/ml/training.py`](src/indusense/ml/training.py), `uv run indusense-train`) · protocole d'évaluation (PR-AUC primaire, TimeSeriesSplit, seuil 0.5)
+**Statut** : [x] terminé — 3 modèles (LogReg/RF/XGBoost), split chronologique existant + `random_state` fixé, imputeur médiane fit-train (referme la fuite silver du 2026-07-06)
 
 ---
 
@@ -108,13 +108,13 @@
 
 **Objectif** : sélectionner et entraîner le modèle adapté, avec tracking.
 
-- [ ] Choisir le modèle adapté (tabulaire / vision / anomalie)
-- [ ] Entraîner avec tracking des expériences (paramètres, métriques, artefacts)
+- [x] Choisir le modèle adapté (tabulaire / vision / anomalie)
+- [x] Entraîner avec tracking des expériences (paramètres, métriques, artefacts)
 - [ ] Sauvegarder checkpoints et gérer l'early stopping
 
 🔧 **Technos / outils** : **CNN** · **autoencodeur** · **YOLO** (vision) · **cross-validation** · **régularisation** · **MLflow** (tracking) · **checkpoints** · **early stopping**
-📦 **Artefacts** : runs MLflow · modèle entraîné · checkpoints
-**Statut** : _____
+📦 **Artefacts** : runs MLflow (`artifacts/ml/mlflow.db`, expérience `indusense-maintenance-ml`) · modèle entraîné (gagnant : XGBoost, PR-AUC test 0.4495 à 24h) · checkpoints
+**Statut** : [~] en cours — 1er POC tabulaire (LogReg/RF/XGBoost) tracké MLflow ; **early stopping/checkpoints, optimisation Optuna et vision (CNN/YOLO) reportés** (B7 et Sprint 02 US 2.2+)
 
 ---
 

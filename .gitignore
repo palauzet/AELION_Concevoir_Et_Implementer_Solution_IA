@@ -22,6 +22,8 @@ artifacts/analyses/telemetry/*/
 artifacts/analyses/referentiel/*/
 artifacts/silver/*/
 artifacts/gold/*/
+artifacts/ml/*/
+artifacts/ml/mlflow.db
 
 # Notebooks
 .ipynb_checkpoints/
