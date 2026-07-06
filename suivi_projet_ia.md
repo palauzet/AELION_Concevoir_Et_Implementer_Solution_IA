@@ -6,12 +6,12 @@
 
 | Champ | Valeur |
 |---|---|
-| **Nom du projet** | _à compléter_ |
-| **Responsable** | _à compléter_ |
-| **Client / commanditaire** | _à compléter_ |
-| **Date de début** | _à compléter_ |
-| **Échéance cible** | _à compléter_ |
-| **Statut global** | 🔵 Cadrage / 🟡 En cours / 🟢 En production / ⚫ Clôturé |
+| **Nom du projet** | InduSense 4.0 — maintenance prédictive (cas d'usage pédagogique) |
+| **Responsable** | Patrick Alauzet (architecte IA) |
+| **Client / commanditaire** | Formation *Concevoir et implémenter une solution IA* (cas d'usage fourni) |
+| **Date de début** | 2026-06-15 |
+| **Échéance cible** | Planning pédagogique = 21 jours (`PROJECT.md`) ; rythme réel étalé sur plusieurs semaines — Sprint 01 en cours de clôture au 2026-07-06 |
+| **Statut global** | 🟡 En cours |
 
 **Légende statut** : `[ ]` à faire · `[~]` en cours · `[x]` terminé
 
@@ -21,14 +21,14 @@
 
 **Objectif** : définir le problème métier, les critères de succès et les contraintes.
 
-- [ ] Cadrer le besoin métier et les KPI de succès
-- [ ] Cartographier les parties prenantes et les impacts (directs/indirects)
-- [ ] Identifier les risques éthiques et le cadre réglementaire
-- [ ] Définir les critères d'acceptation
+- [x] Cadrer le besoin métier et les KPI de succès
+- [x] Cartographier les parties prenantes et les impacts (directs/indirects)
+- [x] Identifier les risques éthiques et le cadre réglementaire
+- [x] Définir les critères d'acceptation
 
 🔧 **Technos / outils** : **Datasheet for datasets** · cadre **RGPD** (confidentialité, minimisation, traçabilité)
-📦 **Artefacts** : note de cadrage · datasheet initiale · liste des KPI
-**Statut** : _____
+📦 **Artefacts** : [note de cadrage](reports/cadrage.md) · [datasheet initiale](reports/datasheet.md) · liste des KPI (`reports/cadrage.md` §5)
+**Statut** : [x] terminé (à réviser si le périmètre ou les données évoluent)
 
 ---
 
@@ -36,14 +36,14 @@
 
 **Objectif** : collecter, modéliser et versionner les données de façon traçable.
 
-- [ ] Mettre en place l'environnement et le versioning de code
-- [ ] Lire / ingérer les sources et modéliser le schéma
+- [x] Mettre en place l'environnement et le versioning de code
+- [x] Lire / ingérer les sources et modéliser le schéma
 - [ ] Versionner les données
-- [ ] Anonymiser / pseudonymiser si données sensibles
+- [~] Anonymiser / pseudonymiser si données sensibles
 
 🔧 **Technos / outils** : **Git** · **venv/pyenv** · **pandas** · **CSV** · **SQLAlchemy (ORM/SQL)** · **DVC** · **ETL** · anonymisation / **confidentialité différentielle**
 📦 **Artefacts** : dataset versionné (DVC) · schéma de données · pipeline ETL
-**Statut** : _____
+**Statut** : [~] en cours — env/git/uv + schéma bronze/silver (3FN, Alembic) faits ; PII (`operator_name`/`badge`/`comment`) exclues du gold mais **non anonymisées à la source** ; DVC reporté Sprint 3
 
 ---
 
@@ -51,13 +51,13 @@
 
 **Objectif** : comprendre les données et détecter les risques tôt.
 
-- [ ] Profiling : valeurs manquantes, doublons, distributions, corrélations
-- [ ] Détecter le déséquilibre de classes et les biais d'échantillonnage
-- [ ] Mettre à jour la datasheet (qualité, limites, biais)
+- [x] Profiling : valeurs manquantes, doublons, distributions, corrélations
+- [x] Détecter le déséquilibre de classes et les biais d'échantillonnage
+- [x] Mettre à jour la datasheet (qualité, limites, biais)
 
 🔧 **Technos / outils** : **pandas** · profiling de données
-📦 **Artefacts** : rapport d'exploration · datasheet mise à jour
-**Statut** : _____
+📦 **Artefacts** : rapport d'exploration (`notebooks/01_analyse_exploratoire.ipynb`, `artifacts/analyses/`) · [datasheet mise à jour](reports/datasheet.md)
+**Statut** : [x] terminé
 
 ---
 
@@ -65,13 +65,13 @@
 
 **Objectif** : produire des données propres et fiables.
 
-- [ ] Nettoyer (règles, normalisation) et journaliser les transformations
-- [ ] Traiter les outliers et les valeurs manquantes
-- [ ] Mettre en place des tests de qualité (seuils, alertes)
+- [x] Nettoyer (règles, normalisation) et journaliser les transformations
+- [~] Traiter les outliers et les valeurs manquantes
+- [x] Mettre en place des tests de qualité (seuils, alertes)
 
 🔧 **Technos / outils** : **Z-score** · **IQR** · imputation **mean/median/KNN** · normalisation
 📦 **Artefacts** : dataset nettoyé · tests de qualité
-**Statut** : _____
+**Statut** : [~] en cours — dédoublonnage, unités, saturation (flag) et imputation interpolation faits ; fuite résiduelle corrigée côté silver (médiane de secours globale retirée, 2026-07-06) ; **imputeur médiane fit-train restant à ajouter au pipeline modèle** (Sprint 02)
 
 ---
 
@@ -79,14 +79,14 @@
 
 **Objectif** : construire les variables, sans fuite, et préparer le *gold dataset*.
 
-- [ ] Construire les features (lags, rolling windows, agrégations si séries temporelles)
+- [x] Construire les features (lags, rolling windows, agrégations si séries temporelles)
 - [ ] Sélection de features et réduction de dimension
 - [ ] Gérer le déséquilibre (augmentation de données)
-- [ ] Vérifier l'absence de *leakage*
+- [x] Vérifier l'absence de *leakage*
 
 🔧 **Technos / outils** : **TimeSeriesSplit** · `train_test_split` · **PCA** · **SMOTE / ADASYN** · **scaling** · feature selection
-📦 **Artefacts** : gold dataset · pipeline de features
-**Statut** : _____
+📦 **Artefacts** : gold dataset (130 613 × 127, [`src/indusense/data/gold.py`](src/indusense/data/gold.py)) · pipeline de features
+**Statut** : [~] en cours — features + labels + split chronologique + vérifications anti-fuite faits ; **PCA/feature selection et SMOTE/ADASYN reportés au pipeline modèle** (Sprint 02, US 1.5 restante, fit-train uniquement)
 
 ---
 

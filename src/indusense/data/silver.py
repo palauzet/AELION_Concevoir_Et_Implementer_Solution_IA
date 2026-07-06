@@ -155,9 +155,12 @@ def _flag_and_segment(df: pd.DataFrame, windows: pd.DataFrame) -> pd.DataFrame:
 def impute_telemetry(df: pd.DataFrame) -> pd.DataFrame:
     """Impute les NaN capteurs **hors fenêtres de maintenance**, par segment inter-maintenance.
 
-    Interpolation linéaire dans le temps au sein de ``(machine_id, _segment)`` ; médiane en
-    secours. Les NaN *en* fenêtre de maintenance restent NaN (non opérationnels → gold).
-    ``<capteur>_was_imputed`` marque les valeurs réellement imputées.
+    Interpolation linéaire dans le temps au sein de ``(machine_id, _segment)``. Les segments
+    entièrement NaN (aucune valeur à interpoler) restent NaN : une médiane de secours calculée
+    ici serait fittée sur l'ensemble du dataset (train+val+test), donc *data leakage* ; le
+    résiduel est laissé à un imputeur **fit-train** dans le pipeline modèle (même discipline que
+    scaling/PCA). Les NaN *en* fenêtre de maintenance restent NaN aussi (non opérationnels →
+    gold). ``<capteur>_was_imputed`` marque les valeurs réellement imputées (interpolation).
     """
     df = df.copy()
     op_mask = ~df["during_maintenance"]
@@ -168,8 +171,6 @@ def impute_telemetry(df: pd.DataFrame) -> pd.DataFrame:
             lambda s: s.interpolate(method="linear", limit_direction="both")
         )
         df.loc[op_mask, col] = op[col]
-        median = df.loc[op_mask, col].median()
-        df.loc[op_mask & df[col].isna(), col] = median
         df[f"{col}_was_imputed"] = was_nan & df[col].notna()
     return df
 
