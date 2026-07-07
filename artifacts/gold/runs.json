@@ -103,5 +103,25 @@
     "n_features_smd_notable": 17,
     "smd_max": 0.3837,
     "smd_max_feature": "temperature_c"
+  },
+  {
+    "run_id": "202607071451",
+    "n_lignes": 130613,
+    "n_features": 118,
+    "taux_positifs": {
+      "6h": 0.0433,
+      "12h": 0.0846,
+      "24h": 0.1632,
+      "48h": 0.2509
+    },
+    "rul_censored": 3258,
+    "split": {
+      "train": 91389,
+      "test": 19653,
+      "val": 19571
+    },
+    "n_features_smd_notable": 17,
+    "smd_max": 0.3837,
+    "smd_max_feature": "temperature_c"
   }
 ]
