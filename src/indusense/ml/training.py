@@ -42,6 +42,7 @@ logging.getLogger("mlflow").setLevel(logging.ERROR)
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import seaborn as sns  # noqa: E402
+from matplotlib.colors import ListedColormap  # noqa: E402
 from sklearn.compose import ColumnTransformer  # noqa: E402
 from sklearn.ensemble import RandomForestClassifier  # noqa: E402
 from sklearn.impute import SimpleImputer  # noqa: E402
@@ -244,6 +245,15 @@ def build_comparison_table(results: dict) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
+def _confusion_grid(row: pd.Series) -> np.ndarray:
+    """Grille 2x2 dans la convention pédagogique du cours (schéma de référence) : la classe
+    positive « Panne » est mise **en premier** sur les deux axes -> TP en haut à gauche,
+    FN en haut à droite, FP en bas à gauche, TN en bas à droite. Sans ça, l'ordre 0/1 de
+    sklearn (négatif d'abord) inverse visuellement la lecture par rapport au schéma du cours.
+    """
+    return np.array([[row["tp"], row["fn"]], [row["fp"], row["tn"]]])
+
+
 # --- Figures (SVG, même style que gold.make_figures) -------------------------------
 def make_figures(results: dict, comparison: pd.DataFrame, out_dir: Path) -> list[str]:
     """3 figures : comparaison PR/ROC-AUC, matrice de confusion du gagnant, PR-AUC CV."""
@@ -273,17 +283,23 @@ def make_figures(results: dict, comparison: pd.DataFrame, out_dir: Path) -> list
           "Mesure : score sur le split test (jamais utilisé pour l'entraînement/tuning). "
           "PR-AUC = métrique primaire (classes déséquilibrées) ; ne pas lire l'accuracy.")
 
-    # 2. Matrice de confusion du gagnant
+    # 2. Matrice de confusion du gagnant (couleurs de statut : vert=TP, rouge=FN — danger,
+    # orange=FP, bleu=TN — cf. _confusion_grid pour la convention d'axes).
     winner = comparison.iloc[0]
-    cm = np.array([[winner["tn"], winner["fp"]], [winner["fn"], winner["tp"]]])
-    fig, ax = plt.subplots(figsize=(4.5, 4))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", cbar=False,
-                xticklabels=["Préd. 0", "Préd. 1"], yticklabels=["Réel 0", "Réel 1"], ax=ax)
+    cm = _confusion_grid(winner)
+    status = np.array([[0, 1], [2, 3]])  # TP, FN / FP, TN -> indices de couleur
+    status_cmap = ListedColormap(["#55A868", "#C44E52", "#DD8452", "#4C72B0"])
+    fig, ax = plt.subplots(figsize=(4.8, 4.2))
+    sns.heatmap(status, annot=cm.astype(str), fmt="", cmap=status_cmap, cbar=False,
+                vmin=0, vmax=3, linewidths=1.5, linecolor="white",
+                xticklabels=["Prédit : Panne", "Prédit : OK"],
+                yticklabels=["Réel : Panne", "Réel : OK"],
+                annot_kws={"fontsize": 13, "fontweight": "bold", "color": "white"}, ax=ax)
     ax.set(title=f"2. Matrice de confusion — {winner['model']} "
                  f"(seuil {config.ML_DECISION_THRESHOLD})")
     _save(fig, "02_matrice_confusion.svg",
-          "Mesure : erreurs au seuil fixe sur le test. Faux négatifs = pannes manquées "
-          "(coût métier prioritaire, cf. Recall).")
+          "Mesure : erreurs au seuil fixe sur le test. Faux négatifs (rouge) = pannes "
+          "manquées, coût métier prioritaire ; faux positifs (orange) = fausses alertes.")
 
     # 3. PR-AUC — validation croisée temporelle (moyenne ± écart-type)
     fig, ax = plt.subplots(figsize=(7, 4))

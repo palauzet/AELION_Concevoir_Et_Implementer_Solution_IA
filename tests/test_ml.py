@@ -145,6 +145,18 @@ def test_build_comparison_table_sorted_by_pr_auc() -> None:
     assert table["pr_auc_test"].is_monotonic_decreasing
 
 
+def test_confusion_grid_matches_course_convention() -> None:
+    """La figure doit suivre la convention du cours : Panne (positif) en premier sur les
+    deux axes -> TP en haut à gauche, FN en haut à droite, FP en bas à gauche, TN en bas
+    à droite (et non l'ordre 0/1 de sklearn, négatif d'abord, qui inverserait la lecture)."""
+    row = pd.Series({"tn": 1, "fp": 2, "fn": 3, "tp": 4})
+    grid = training._confusion_grid(row)
+    assert grid[0, 0] == 4  # TP
+    assert grid[0, 1] == 3  # FN
+    assert grid[1, 0] == 2  # FP
+    assert grid[1, 1] == 1  # TN
+
+
 def test_run_smoke(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(config, "ML_DIR", tmp_path / "ml")
 
