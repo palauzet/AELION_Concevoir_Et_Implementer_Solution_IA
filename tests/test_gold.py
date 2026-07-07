@@ -76,6 +76,49 @@ def test_assign_split_chronologique() -> None:
         <= out.loc[out["split"] == "test", "timestamp"].min()
 
 
+def test_compare_splits_label_rates_par_horizon() -> None:
+    df = pd.DataFrame({
+        "split": ["train"] * 6 + ["val"] * 2 + ["test"] * 2,
+        "label_incident_6h": [1, 0, 0, 0, 0, 0, 1, 0, 1, 1],
+        "label_incident_12h": [0] * 10,
+        "label_incident_24h": [0] * 10,
+        "label_incident_48h": [0] * 10,
+    })
+    out = gold.compare_splits_label_rates(df)
+    assert set(out["horizon_h"]) == set(config.LABEL_HORIZONS)
+    row6 = out.loc[out["horizon_h"] == 6].iloc[0]
+    assert row6["train"] == round(1 / 6, 4)
+    assert row6["val"] == 0.5
+    assert row6["test"] == 1.0
+
+
+def test_compare_splits_numeric_detecte_feature_decalee() -> None:
+    train_vals = [10.0, 10.5, 9.5, 10.2, 9.8, 10.1, 9.9, 10.3, 9.7, 10.0,
+                  10.4, 9.6, 10.1, 9.9, 10.2, 9.8, 10.0, 10.3, 9.7, 10.1]
+    test_vals = [20.0, 20.5, 19.5, 20.2, 19.8, 20.1, 19.9, 20.3, 19.7, 20.0]
+    df = pd.DataFrame({
+        "split": ["train"] * 20 + ["test"] * 10,
+        "stable_feature": [1.0] * 30,  # identique partout -> variance nulle -> SMD forcé à 0
+        "shifted_feature": train_vals + test_vals,  # décalage net (~10) devant l'écart-type (~0.3)
+    })
+    out = gold.compare_splits_numeric(df, numeric_cols=["stable_feature", "shifted_feature"])
+    # Trié par |SMD| décroissant -> la feature décalée arrive en tête.
+    assert out.iloc[0]["feature"] == "shifted_feature"
+    assert abs(out.iloc[0]["smd_train_test"]) > 1.0
+    assert out.loc[out["feature"] == "stable_feature", "smd_train_test"].iloc[0] == 0.0
+
+
+def test_compare_splits_categorical_partitionne_a_un() -> None:
+    df = pd.DataFrame({
+        "split": ["train"] * 6 + ["test"] * 4,
+        "model": ["X1", "X1", "X2", "X1", "X2", "X2", "X1", "X1", "X2", "X2"],
+    })
+    out = gold.compare_splits_categorical(df, categorical_cols=["model"])
+    for split in ("train", "test"):
+        assert abs(out[split].sum() - 1.0) < 1e-9
+    assert out.loc[out["modalite"] == "X1", "train"].iloc[0] == round(3 / 6, 4)
+
+
 # --- Smoke : build_gold complet sur un silver synthétique (sans base) --------
 def _silver_sample() -> dict[str, pd.DataFrame]:
     reading, meas, rid = [], [], 1

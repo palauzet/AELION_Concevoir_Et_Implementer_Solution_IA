@@ -32,6 +32,16 @@ Dataset **ML de maintenance prédictive** : matrice features + labels, 1 ligne p
 - **Split chronologique** `train/val/test` (70/15/15 du temps) matérialisé en colonne
   `split` : protocole reproductible et non aléatoire (TimeSeriesSplit au modèle).
 
+## Équivalence statistique des splits
+Un split chronologique n'est pas aléatoire : rien ne garantit *a priori* que train/val/test
+restent comparables (dérive de composition du parc, saisonnalité des pannes...). Vérifié à
+chaque run plutôt que supposé (`compare_splits_label_rates/numeric/categorical`, écrits en
+CSV dans `artifacts/gold/<run_id>/`) :
+- Taux de positifs par horizon et par split (figure 4).
+- Écart standardisé (SMD, Austin 2009) train vs test par feature numérique — |SMD| ≥ 0.1
+  signale un déséquilibre notable (`n_features_smd_notable`/`smd_max` dans `runs.md`).
+- Répartition des catégorielles (`model`, `criticality`...) par split.
+
 ## Sorties
 Parquet canonique (`data/processed/gold_dataset.parquet`) + run versionné
 (`artifacts/gold/<run_id>/`) + table SQL `gold.dataset` (matérialisée pour inspection, **hors

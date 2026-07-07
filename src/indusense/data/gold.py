@@ -296,6 +296,77 @@ def assign_split(df: pd.DataFrame, ratios: tuple[float, float] = (0.70, 0.85)) -
     return df
 
 
+# --- Comparaison des splits (le split chronologique n'est pas aléatoire : on vérifie qu'il
+# reste statistiquement raisonnable plutôt que de le supposer) -----------------------------
+def compare_splits_label_rates(df: pd.DataFrame) -> pd.DataFrame:
+    """Taux de positifs par horizon et par split — la cible doit rester comparable d'un split
+    à l'autre malgré le découpage chronologique (ex. pas de saisonnalité des pannes qui
+    concentrerait les incidents sur le test)."""
+    rows = []
+    for h in HORIZONS:
+        col = f"label_incident_{h}h"
+        row: dict = {"horizon_h": h}
+        for split in ("train", "val", "test"):
+            sub = df.loc[df["split"] == split, col]
+            row[split] = round(float(sub.mean()), 4) if len(sub) else float("nan")
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def compare_splits_numeric(
+    df: pd.DataFrame, numeric_cols: list[str] | None = None
+) -> pd.DataFrame:
+    """Moyenne par split + écart standardisé (SMD) train vs test, par feature numérique.
+
+    ``smd = (moyenne_test - moyenne_train) / écart-type poolé`` (Austin 2009) : |SMD| ≥ 0.1
+    signale un déséquilibre notable entre train et test à surveiller. Trié par |SMD|
+    décroissant (les features les plus décalées en tête).
+    """
+    if numeric_cols is None:
+        exclude = {"machine_pk", "rul_hours", "rul_censored"} | {
+            f"label_incident_{h}h" for h in HORIZONS
+        }
+        numeric_cols = [c for c in df.select_dtypes("number").columns if c not in exclude]
+    rows = []
+    for col in numeric_cols:
+        train = df.loc[df["split"] == "train", col]
+        val = df.loc[df["split"] == "val", col]
+        test = df.loc[df["split"] == "test", col]
+        pooled_std = float(np.sqrt((train.var() + test.var()) / 2))
+        smd = (test.mean() - train.mean()) / pooled_std if pooled_std > 0 else 0.0
+        rows.append({
+            "feature": col,
+            "train_mean": round(float(train.mean()), 4),
+            "val_mean": round(float(val.mean()), 4),
+            "test_mean": round(float(test.mean()), 4),
+            "smd_train_test": round(float(smd), 4),
+        })
+    out = pd.DataFrame(rows)
+    return out.sort_values("smd_train_test", key=lambda s: s.abs(), ascending=False).reset_index(
+        drop=True
+    )
+
+
+def compare_splits_categorical(
+    df: pd.DataFrame, categorical_cols: list[str] | None = None
+) -> pd.DataFrame:
+    """Répartition (%) de chaque modalité catégorielle par split — détecte une dérive de
+    composition du parc (ex. un modèle de machine concentré sur une période donnée)."""
+    if categorical_cols is None:
+        categorical_cols = ["model", "criticality", "production_line", "location", "shift"]
+    rows = []
+    for col in categorical_cols:
+        shares = df.groupby("split")[col].value_counts(normalize=True).unstack("split").fillna(0.0)
+        for level, r in shares.iterrows():
+            rows.append({
+                "feature": col, "modalite": level,
+                "train": round(float(r.get("train", 0.0)), 4),
+                "val": round(float(r.get("val", 0.0)), 4),
+                "test": round(float(r.get("test", 0.0)), 4),
+            })
+    return pd.DataFrame(rows)
+
+
 # --- Assemblage -------------------------------------------------------------
 def build_gold(silver: dict[str, pd.DataFrame]) -> tuple[pd.DataFrame, dict]:
     """Construit la matrice gold complète (features + labels) et ses métriques."""
@@ -382,6 +453,26 @@ def make_figures(df: pd.DataFrame, out_dir: Path) -> list[str]:
     _save(fig, "03_correlations_label24h.svg",
           "Mesure : 15 features de plus forte corrélation (|r|) avec le label à 24 h. "
           "Premier tri du pouvoir prédictif (linéaire) avant modélisation.")
+
+    # 4. Comparaison train/val/test : taux de positifs par horizon (le split est chronologique,
+    # pas aléatoire — on vérifie l'équivalence statistique plutôt que de la supposer).
+    split_rates = compare_splits_label_rates(df)
+    x4 = np.arange(len(split_rates))
+    width = 0.25
+    colors = {"train": "#4C72B0", "val": "#DD8452", "test": "#55A868"}
+    fig, ax = plt.subplots(figsize=(7, 4))
+    for i, split in enumerate(("train", "val", "test")):
+        ax.bar(x4 + (i - 1) * width, split_rates[split] * 100, width,
+               label=split, color=colors[split])
+    ax.set_xticks(x4)
+    ax.set_xticklabels([f"{h}h" for h in split_rates["horizon_h"]])
+    ax.legend()
+    ax.set(title="4. Comparaison train/val/test — taux de positifs par horizon",
+           xlabel="Horizon", ylabel="% relevés positifs")
+    _save(fig, "04_comparaison_splits.svg",
+          "Mesure : équivalence statistique du split chronologique sur la cible. Un taux très "
+          "différent entre splits signalerait une dérive (ex. saisonnalité des pannes) au-delà "
+          "du simple découpage temporel — cf. aussi compare_splits_numeric/categorical.")
     return files
 
 
@@ -396,14 +487,16 @@ def write_gold(df: pd.DataFrame, engine) -> None:
 def _render_runs_md(runs: list[dict]) -> str:
     header = (
         "# Journal des runs — construction gold\n\n"
-        "| Run | Lignes | Features | Pos. 24h | Pos. 48h | RUL censurés | Train/Val/Test |\n"
-        "|---|---:|---:|---:|---:|---:|---|\n"
+        "| Run | Lignes | Features | Pos. 24h | Pos. 48h | RUL censurés | Train/Val/Test | "
+        "SMD max (feature) |\n"
+        "|---|---:|---:|---:|---:|---:|---|---|\n"
     )
     rows = "".join(
         f"| {r['run_id']} | {r['n_lignes']} | {r['n_features']} | "
         f"{r['taux_positifs'].get('24h', '-')} | {r['taux_positifs'].get('48h', '-')} | "
         f"{r['rul_censored']} | "
-        f"{r['split'].get('train', 0)}/{r['split'].get('val', 0)}/{r['split'].get('test', 0)} |\n"
+        f"{r['split'].get('train', 0)}/{r['split'].get('val', 0)}/{r['split'].get('test', 0)} | "
+        f"{r.get('smd_max', '-')} ({r.get('smd_max_feature', '-')}) |\n"
         for r in sorted(runs, key=lambda r: r["run_id"])
     )
     return header + rows
@@ -414,7 +507,8 @@ def append_run(meta: dict) -> None:
     path = config.GOLD_DIR / "runs.json"
     runs = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
     runs.append({k: meta[k] for k in
-                 ("run_id", "n_lignes", "n_features", "taux_positifs", "rul_censored", "split")})
+                 ("run_id", "n_lignes", "n_features", "taux_positifs", "rul_censored", "split",
+                  "n_features_smd_notable", "smd_max", "smd_max_feature")})
     path.write_text(json.dumps(runs, indent=2, ensure_ascii=False), encoding="utf-8")
     (config.GOLD_DIR / "runs.md").write_text(_render_runs_md(runs), encoding="utf-8")
 
@@ -455,6 +549,16 @@ Dataset **ML de maintenance prédictive** : matrice features + labels, 1 ligne p
 - **Split chronologique** `train/val/test` (70/15/15 du temps) matérialisé en colonne
   `split` : protocole reproductible et non aléatoire (TimeSeriesSplit au modèle).
 
+## Équivalence statistique des splits
+Un split chronologique n'est pas aléatoire : rien ne garantit *a priori* que train/val/test
+restent comparables (dérive de composition du parc, saisonnalité des pannes...). Vérifié à
+chaque run plutôt que supposé (`compare_splits_label_rates/numeric/categorical`, écrits en
+CSV dans `artifacts/gold/<run_id>/`) :
+- Taux de positifs par horizon et par split (figure 4).
+- Écart standardisé (SMD, Austin 2009) train vs test par feature numérique — |SMD| ≥ 0.1
+  signale un déséquilibre notable (`n_features_smd_notable`/`smd_max` dans `runs.md`).
+- Répartition des catégorielles (`model`, `criticality`...) par split.
+
 ## Sorties
 Parquet canonique (`data/processed/gold_dataset.parquet`) + run versionné
 (`artifacts/gold/<run_id>/`) + table SQL `gold.dataset` (matérialisée pour inspection, **hors
@@ -482,6 +586,12 @@ def run(now: datetime | None = None) -> dict:
     if engine is not None:
         write_gold(df, engine)
 
+    numeric_cmp = compare_splits_numeric(df)
+    compare_splits_label_rates(df).to_csv(run_dir / "split_label_rates.csv", index=False)
+    numeric_cmp.to_csv(run_dir / "split_numeric_stats.csv", index=False)
+    compare_splits_categorical(df).to_csv(run_dir / "split_categorical_shares.csv", index=False)
+    smd_notable = numeric_cmp.loc[numeric_cmp["smd_train_test"].abs() >= 0.1]
+
     meta = {
         "run_id": run_id,
         "timestamp": now.isoformat(timespec="seconds"),
@@ -489,6 +599,10 @@ def run(now: datetime | None = None) -> dict:
         "figures": figures,
         "chemin": str(run_dir),
         **metrics,
+        "n_features_smd_notable": int(len(smd_notable)),
+        "smd_max": round(float(numeric_cmp["smd_train_test"].abs().max()), 4)
+        if len(numeric_cmp) else 0.0,
+        "smd_max_feature": str(numeric_cmp.iloc[0]["feature"]) if len(numeric_cmp) else None,
     }
     (run_dir / "run_metadata.json").write_text(
         json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
@@ -509,6 +623,8 @@ def main(argv: list[str] | None = None) -> None:
           f"colonnes={meta['n_colonnes']}")
     print(f"  taux positifs : {meta['taux_positifs']}")
     print(f"  RUL censurés : {meta['rul_censored']} | split : {meta['split']}")
+    print(f"  équivalence splits : {meta['n_features_smd_notable']} feature(s) |SMD|>=0.1 "
+          f"(max={meta['smd_max']} sur {meta['smd_max_feature']})")
     print(f"  {len(meta['figures'])} figures ; table "
           f"'{config.SCHEMA_GOLD}.dataset' + parquet écrits.")
 
