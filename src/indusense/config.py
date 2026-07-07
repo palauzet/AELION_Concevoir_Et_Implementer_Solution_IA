@@ -59,6 +59,13 @@ MLFLOW_EXPERIMENT = "indusense-maintenance-ml"
 ML_DEFAULT_HORIZON = 24  # horizon par défaut (h) — cf. LABEL_HORIZONS
 ML_DECISION_THRESHOLD = 0.5  # seuil de décision par défaut (choix motivé -> B7)
 
+# --- Optimisation d'hyperparamètres (B7) -------------------------------------
+# Backend Optuna local (SQLite, non versionné — cf. .gitignore), séparé de mlflow.db.
+TUNING_DIR = ARTIFACTS_DIR / "tuning"
+OPTUNA_STORAGE = f"sqlite:///{(TUNING_DIR / 'optuna.db').as_posix()}"
+TUNING_N_TRIALS = 50  # budget par défaut (décision utilisateur, pas de timeout)
+TUNING_N_SPLITS = 5   # CV train-only (aligné sur la convention n_splits=5 du projet)
+
 # Fenêtres glissantes (heures) des features de dynamique/dégradation du gold, et horizons
 # (heures) des labels « incident à venir ». Alignés volontairement (cf. décision projet).
 ROLLING_WINDOWS = (6, 12, 24, 48)

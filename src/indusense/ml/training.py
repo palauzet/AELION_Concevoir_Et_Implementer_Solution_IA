@@ -394,22 +394,16 @@ def make_figures(results: dict, comparison: pd.DataFrame, out_dir: Path) -> list
 
 
 # --- MLflow --------------------------------------------------------------------------
-def log_run_to_mlflow(
-    run_name: str, pipeline: Pipeline, params: dict, metrics: dict, fig_paths: list[Path]
-) -> None:
-    """Log params/métriques/figures/modèle sur un run MLflow (backend SQLite local).
+def ensure_mlflow_experiment() -> None:
+    """Configure tracking URI + expérience MLflow (SQLite local, ``config.ML_DIR``).
 
-    ``run_name`` doit être unique et explicite (convention : ``algo_horizonh_run_id``,
-    cf. ``run()``) — le nom seul de l'algo serait ambigu entre les runs/horizons dans l'UI
-    MLflow.
-
-    URI de tracking + emplacement des artefacts recalculés depuis ``config.ML_DIR`` à chaque
-    appel (pas une constante figée) pour rester redirigeable en test (``config.ML_DIR``
-    monkeypatché -> DB + artefacts isolés). Sans ``artifact_location`` explicite à la création
-    de l'expérience, MLflow écrit les artefacts (figures, modèle) dans un ``mlruns/`` à la
-    racine du process (CWD), hors de ``artifacts/ml/`` — d'où la création manuelle ici.
-    Les métriques NaN (ex. ROC-AUC indéfini sur un fold CV dégénéré, trop peu de positifs)
-    sont exclues : le backend SQLite MLflow rejette certains doublons NaN au même timestamp.
+    Recalculé depuis ``config.ML_DIR`` à chaque appel (pas une constante figée) pour rester
+    redirigeable en test (``config.ML_DIR`` monkeypatché -> DB + artefacts isolés). Sans
+    ``artifact_location`` explicite à la création de l'expérience, MLflow écrit les artefacts
+    (figures, modèle) dans un ``mlruns/`` à la racine du process (CWD), hors de
+    ``artifacts/ml/`` — d'où la création manuelle ici. Factorisé pour être appelé aussi bien
+    par ``log_run_to_mlflow`` que par le module ``tuning`` (qui ouvre lui-même un run MLflow
+    parent "étude" avant d'y imbriquer un run par essai Optuna).
     """
     config.ML_DIR.mkdir(parents=True, exist_ok=True)
     mlflow.set_tracking_uri(f"sqlite:///{(config.ML_DIR / 'mlflow.db').as_posix()}")
@@ -422,8 +416,25 @@ def log_run_to_mlflow(
             config.MLFLOW_EXPERIMENT, artifact_location=artifact_dir.resolve().as_uri()
         )
     mlflow.set_experiment(config.MLFLOW_EXPERIMENT)
+
+
+def log_run_to_mlflow(
+    run_name: str, pipeline: Pipeline, params: dict, metrics: dict, fig_paths: list[Path],
+    *, nested: bool = False,
+) -> None:
+    """Log params/métriques/figures/modèle sur un run MLflow (backend SQLite local).
+
+    ``run_name`` doit être unique et explicite (convention : ``algo_horizonh_run_id``,
+    cf. ``run()``) — le nom seul de l'algo serait ambigu entre les runs/horizons dans l'UI
+    MLflow. ``nested=True`` quand un run parent est déjà actif (ex. le module ``tuning``
+    l'appelle depuis l'intérieur d'un run "étude" pour le modèle final réentraîné).
+
+    Les métriques NaN (ex. ROC-AUC indéfini sur un fold CV dégénéré, trop peu de positifs)
+    sont exclues : le backend SQLite MLflow rejette certains doublons NaN au même timestamp.
+    """
+    ensure_mlflow_experiment()
     clean_metrics = {k: v for k, v in metrics.items() if not (isinstance(v, float) and np.isnan(v))}
-    with mlflow.start_run(run_name=run_name):
+    with mlflow.start_run(run_name=run_name, nested=nested):
         mlflow.log_params(params)
         mlflow.log_metrics(clean_metrics)
         for fig_path in fig_paths:

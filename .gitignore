@@ -24,6 +24,8 @@ artifacts/silver/*/
 artifacts/gold/*/
 artifacts/ml/*/
 artifacts/ml/mlflow.db
+artifacts/tuning/*/
+artifacts/tuning/optuna.db
 
 # Notebooks
 .ipynb_checkpoints/

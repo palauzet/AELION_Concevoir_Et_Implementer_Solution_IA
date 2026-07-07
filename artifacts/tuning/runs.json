@@ -1,0 +1,13 @@
+[
+  {
+    "run_id": "202607071556",
+    "horizon": 24,
+    "n_trials": 50,
+    "pr_auc_test_baseline": 0.4528,
+    "pr_auc_test": 0.5218,
+    "delta": 0.069,
+    "pr_auc_cv_mean": 0.4351,
+    "pr_auc_cv_std": 0.0572,
+    "smd_abs_max": 0.5821
+  }
+]
