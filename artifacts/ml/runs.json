@@ -63,5 +63,18 @@
       "val": 19571,
       "test": 19653
     }
+  },
+  {
+    "run_id": "202607061646",
+    "horizon": 24,
+    "winner": "xgboost",
+    "pr_auc_test": 0.4495,
+    "roc_auc_test": 0.7098,
+    "threshold": 0.5,
+    "split": {
+      "train": 91389,
+      "val": 19571,
+      "test": 19653
+    }
   }
 ]
