@@ -76,5 +76,70 @@
       "val": 19571,
       "test": 19653
     }
+  },
+  {
+    "run_id": "202607070850",
+    "horizon": 6,
+    "winner": "xgboost",
+    "pr_auc_test": 0.3434,
+    "roc_auc_test": 0.783,
+    "threshold": 0.5,
+    "split": {
+      "train": 91389,
+      "val": 19571,
+      "test": 19653
+    }
+  },
+  {
+    "run_id": "202607070900",
+    "horizon": 6,
+    "winner": "xgboost",
+    "pr_auc_test": 0.3434,
+    "roc_auc_test": 0.783,
+    "threshold": 0.5,
+    "split": {
+      "train": 91389,
+      "val": 19571,
+      "test": 19653
+    }
+  },
+  {
+    "run_id": "202607070904",
+    "horizon": 12,
+    "winner": "xgboost",
+    "pr_auc_test": 0.3738,
+    "roc_auc_test": 0.7419,
+    "threshold": 0.5,
+    "split": {
+      "train": 91389,
+      "val": 19571,
+      "test": 19653
+    }
+  },
+  {
+    "run_id": "202607070910",
+    "horizon": 24,
+    "winner": "xgboost",
+    "pr_auc_test": 0.4495,
+    "roc_auc_test": 0.7098,
+    "threshold": 0.5,
+    "split": {
+      "train": 91389,
+      "val": 19571,
+      "test": 19653
+    }
+  },
+  {
+    "run_id": "202607070915",
+    "horizon": 48,
+    "winner": "logreg",
+    "pr_auc_test": 0.4495,
+    "roc_auc_test": 0.6593,
+    "threshold": 0.5,
+    "split": {
+      "train": 91389,
+      "val": 19571,
+      "test": 19653
+    }
   }
 ]
