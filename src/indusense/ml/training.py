@@ -395,9 +395,13 @@ def make_figures(results: dict, comparison: pd.DataFrame, out_dir: Path) -> list
 
 # --- MLflow --------------------------------------------------------------------------
 def log_run_to_mlflow(
-    name: str, pipeline: Pipeline, params: dict, metrics: dict, fig_paths: list[Path]
+    run_name: str, pipeline: Pipeline, params: dict, metrics: dict, fig_paths: list[Path]
 ) -> None:
     """Log params/métriques/figures/modèle sur un run MLflow (backend SQLite local).
+
+    ``run_name`` doit être unique et explicite (convention : ``algo_horizonh_run_id``,
+    cf. ``run()``) — le nom seul de l'algo serait ambigu entre les runs/horizons dans l'UI
+    MLflow.
 
     URI de tracking + emplacement des artefacts recalculés depuis ``config.ML_DIR`` à chaque
     appel (pas une constante figée) pour rester redirigeable en test (``config.ML_DIR``
@@ -419,7 +423,7 @@ def log_run_to_mlflow(
         )
     mlflow.set_experiment(config.MLFLOW_EXPERIMENT)
     clean_metrics = {k: v for k, v in metrics.items() if not (isinstance(v, float) and np.isnan(v))}
-    with mlflow.start_run(run_name=name):
+    with mlflow.start_run(run_name=run_name):
         mlflow.log_params(params)
         mlflow.log_metrics(clean_metrics)
         for fig_path in fig_paths:
@@ -547,7 +551,7 @@ def run(
             "model_class": type(r["pipeline"].named_steps["model"]).__name__,
         }
         flat_metrics = {**r["metrics"], **r["cv"]}
-        log_run_to_mlflow(name, r["pipeline"], params, flat_metrics,
+        log_run_to_mlflow(f"{name}_{horizon}h_{run_id}", r["pipeline"], params, flat_metrics,
                           [fig_dir / f for f in figures])
 
     comparison.to_csv(run_dir / "comparaison.csv", index=False)
