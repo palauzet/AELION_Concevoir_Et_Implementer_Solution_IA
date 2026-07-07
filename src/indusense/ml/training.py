@@ -51,6 +51,7 @@ from sklearn.metrics import (  # noqa: E402
     average_precision_score,
     confusion_matrix,
     f1_score,
+    precision_recall_curve,
     precision_score,
     recall_score,
     roc_auc_score,
@@ -243,6 +244,85 @@ def build_comparison_table(results: dict) -> pd.DataFrame:
     return pd.DataFrame(rows)[COMPARISON_COLUMNS].sort_values(
         "pr_auc_test", ascending=False
     ).reset_index(drop=True)
+
+
+def _fbeta(precision: np.ndarray, recall: np.ndarray, beta: float) -> np.ndarray:
+    """F-bêta vectorisé, sûr en division par zéro (retourne 0 plutôt que NaN)."""
+    beta2 = beta**2
+    denom = beta2 * precision + recall
+    return np.divide(
+        (1 + beta2) * precision * recall, denom,
+        out=np.zeros_like(denom), where=denom > 0,
+    )
+
+
+def precision_recall_curve_data(y_true: pd.Series, proba: np.ndarray) -> pd.DataFrame:
+    """Précision/rappel/F1/F2 pour chaque seuil candidat (exploration, pas d'entraînement).
+
+    F2 (F-bêta, bêta=2) pondère le rappel deux fois plus que la précision — cohérent avec le
+    coût métier asymétrique documenté dans ``reports/cadrage.md`` (une panne manquée coûte
+    structurellement plus cher qu'une fausse alerte) ; fourni à titre indicatif à côté du F1,
+    pas comme nouveau critère officiel (le choix du seuil reste renvoyé au module B7).
+    """
+    precision, recall, thresholds = precision_recall_curve(y_true, proba)
+    # sklearn ajoute un point (recall=0, precision=1) sans seuil correspondant -> on le retire.
+    precision, recall = precision[:-1], recall[:-1]
+    return pd.DataFrame({
+        "threshold": thresholds,
+        "precision": precision,
+        "recall": recall,
+        "f1": _fbeta(precision, recall, beta=1.0),
+        "f2": _fbeta(precision, recall, beta=2.0),
+    })
+
+
+def best_threshold(pr_df: pd.DataFrame, metric: str = "f1") -> float:
+    """Seuil qui maximise ``metric`` (``"f1"`` ou ``"f2"``) dans le tableau de
+    ``precision_recall_curve_data``."""
+    return float(pr_df.loc[pr_df[metric].idxmax(), "threshold"])
+
+
+def fit_winner_pipeline(
+    horizon: int, winner: str, source: str = "parquet", df: pd.DataFrame | None = None
+) -> tuple[Pipeline, pd.DataFrame, pd.Series]:
+    """Réentraîne uniquement le modèle ``winner`` (pas de CV, pas de journal/MLflow).
+
+    Pour l'exploration du seuil : on a déjà le gagnant d'un ``run()`` complet, inutile de
+    refaire les 3 modèles ni la validation croisée pour tracer une courbe précision/rappel.
+    """
+    gold_df = df if df is not None else load_gold(source=source)
+    X, y, numeric_cols, categorical_cols = split_features_target(gold_df, horizon=horizon)
+    masks = train_val_test_masks(gold_df)
+    X_train, y_train = X[masks["train"]], y[masks["train"]]
+    X_test, y_test = X[masks["test"]], y[masks["test"]]
+    scale_pos_weight = compute_scale_pos_weight(y_train)
+    pipeline = build_models(numeric_cols, categorical_cols, scale_pos_weight)[winner]
+    pipeline.fit(X_train, y_train)
+    return pipeline, X_test, y_test
+
+
+def make_threshold_figure(
+    pr_df: pd.DataFrame, thresholds_to_mark: dict[str, float], out_path: Path, title: str
+) -> None:
+    """Précision/rappel/F1 en fonction du seuil, avec repères verticaux (seuil actuel +
+    optimaux)."""
+    sns.set_theme(style="whitegrid")
+    plt.rcParams["svg.fonttype"] = "none"
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.plot(pr_df["threshold"], pr_df["precision"], label="Précision", color="#4C72B0")
+    ax.plot(pr_df["threshold"], pr_df["recall"], label="Rappel", color="#C44E52")
+    ax.plot(pr_df["threshold"], pr_df["f1"], label="F1", color="#55A868", linestyle="--")
+    mark_colors = ["#444444", "#DD8452", "#8172B2"]
+    for (label, value), color in zip(thresholds_to_mark.items(), mark_colors, strict=False):
+        ax.axvline(value, color=color, linestyle=":", linewidth=1.5, label=f"{label} ({value:.2f})")
+    ax.set(xlabel="Seuil de décision", ylabel="Score", title=title, xlim=(0, 1))
+    ax.legend(fontsize=8, loc="center left", bbox_to_anchor=(1.0, 0.5))
+    fig.text(0.5, -0.06,
+              "Exploration (n'affecte pas le seuil fixe 0.5 de B5) : chaque seuil déplace le "
+              "curseur précision/rappel sans ré-entraîner le modèle. Choix du seuil renvoyé à B7.",
+              ha="center", va="top", fontsize=8.5, style="italic", color="#444444", wrap=True)
+    fig.savefig(out_path, format="svg", bbox_inches="tight")
+    plt.close(fig)
 
 
 def _confusion_grid(row: pd.Series) -> np.ndarray:

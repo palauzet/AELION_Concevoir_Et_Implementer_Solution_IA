@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import f1_score, precision_score, recall_score
 
 from indusense import config
 from indusense.ml import training
@@ -155,6 +156,46 @@ def test_confusion_grid_matches_course_convention() -> None:
     assert grid[0, 1] == 3  # FN
     assert grid[1, 0] == 2  # FP
     assert grid[1, 1] == 1  # TN
+
+
+def test_precision_recall_curve_data_matches_sklearn_at_threshold() -> None:
+    y_true = pd.Series([0, 0, 1, 1, 1, 0, 1, 0])
+    proba = np.array([0.1, 0.4, 0.35, 0.8, 0.6, 0.2, 0.55, 0.9])
+
+    pr_df = training.precision_recall_curve_data(y_true, proba)
+
+    for t in pr_df["threshold"].sample(min(3, len(pr_df)), random_state=0):
+        y_pred = (proba >= t).astype(int)
+        row = pr_df.loc[np.isclose(pr_df["threshold"], t)].iloc[0]
+        assert np.isclose(row["precision"], precision_score(y_true, y_pred, zero_division=0))
+        assert np.isclose(row["recall"], recall_score(y_true, y_pred, zero_division=0))
+        assert np.isclose(row["f1"], f1_score(y_true, y_pred, zero_division=0))
+
+
+def test_best_threshold_picks_max_metric() -> None:
+    pr_df = pd.DataFrame({
+        "threshold": [0.2, 0.5, 0.8],
+        "precision": [0.5, 0.6, 0.9],
+        "recall": [0.9, 0.6, 0.2],
+        "f1": [0.64, 0.60, 0.33],
+        "f2": [0.78, 0.60, 0.24],
+    })
+    assert training.best_threshold(pr_df, "f1") == 0.2
+    assert training.best_threshold(pr_df, "f2") == 0.2
+
+
+def test_fit_winner_pipeline_has_no_persistence_side_effects(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(config, "ML_DIR", tmp_path / "ml")
+    df = _gold_sample()
+
+    pipeline, X_test, y_test = training.fit_winner_pipeline(24, "logreg", df=df)
+
+    masks = training.train_val_test_masks(df)
+    assert len(X_test) == int(masks["test"].sum())
+    assert len(y_test) == int(masks["test"].sum())
+    proba = pipeline.predict_proba(X_test)[:, 1]
+    assert proba.shape == (len(X_test),)
+    assert not (tmp_path / "ml").exists()  # pas de run journalisé, contrairement à run()
 
 
 def test_run_smoke(tmp_path, monkeypatch) -> None:
