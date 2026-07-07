@@ -69,3 +69,18 @@ addopts = "-ra"
 python_version = "3.13"
 packages = ["indusense"]
 ignore_missing_imports = true
+
+[tool.pyright]
+include = ["src", "tests"]
+typeCheckingMode = "basic"
+# Bruit de stubs tiers (mlflow expose ses sous-modules dynamiquement ; pandas/scikit-learn
+# stubs élargissent les types de retour en unions Series|DataFrame|ndarray) sans rapport avec
+# un bug réel — le vérificateur faisant foi pour ce projet est `mypy` (cf. [tool.mypy]
+# ci-dessus, propre sur tout le code), qui ne remonte aucun de ces cas.
+reportPrivateImportUsage = false
+reportArgumentType = false
+reportReturnType = false
+reportCallIssue = false
+reportAttributeAccessIssue = false
+reportGeneralTypeIssues = false
+reportOperatorIssue = false
