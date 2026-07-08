@@ -26,6 +26,7 @@ artifacts/ml/*/
 artifacts/ml/mlflow.db
 artifacts/tuning/*/
 artifacts/tuning/optuna.db
+artifacts/explain/*/
 
 # Notebooks
 .ipynb_checkpoints/

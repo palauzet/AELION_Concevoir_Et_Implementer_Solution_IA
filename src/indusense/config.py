@@ -66,6 +66,13 @@ OPTUNA_STORAGE = f"sqlite:///{(TUNING_DIR / 'optuna.db').as_posix()}"
 TUNING_N_TRIALS = 50  # budget par défaut (décision utilisateur, pas de timeout)
 TUNING_N_SPLITS = 5   # CV train-only (aligné sur la convention n_splits=5 du projet)
 
+# --- Explicabilité SHAP (B8) --------------------------------------------------
+EXPLAIN_DIR = ARTIFACTS_DIR / "explain"
+EXPLAIN_TOP_N = 15  # nombre de features affichées dans les graphiques d'importance
+# Sous-échantillon d'AFFICHAGE du nuage SHAP (beeswarm) — le calcul |SHAP| moyen reste sur
+# le test complet, seul le nuage de points est sous-échantillonné pour la lisibilité/poids du SVG.
+EXPLAIN_BEESWARM_SAMPLE = 2000
+
 # Fenêtres glissantes (heures) des features de dynamique/dégradation du gold, et horizons
 # (heures) des labels « incident à venir ». Alignés volontairement (cf. décision projet).
 ROLLING_WINDOWS = (6, 12, 24, 48)

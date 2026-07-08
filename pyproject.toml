@@ -24,6 +24,7 @@ dependencies = [
     "mlflow>=2.15",   # tracking des runs d'entraînement (backend SQLite local)
     "xgboost>=2.1",   # gradient boosting — modèle principal du POC ML
     "optuna>=4.0",    # optimisation d'hyperparamètres (B7, backend SQLite local)
+    "shap>=0.46",     # explicabilité des modèles (B8)
 ]
 
 [project.scripts]
@@ -36,6 +37,7 @@ indusense-silver = "indusense.data.silver:main"
 indusense-gold = "indusense.data.gold:main"
 indusense-train = "indusense.ml.training:main"
 indusense-tune = "indusense.ml.tuning:main"
+indusense-explain = "indusense.ml.explain:main"
 
 [dependency-groups]
 # Outillage de dev — installé via `uv sync` (groupe activé par défaut).
