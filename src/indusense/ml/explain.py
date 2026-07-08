@@ -31,7 +31,7 @@ graine fixe) pour rester lisible et léger en SVG.
 Pas de tracking MLflow ici : ce module ne produit ni n'enregistre de nouveau modèle (les
 deux pipelines réentraînés ne font que reproduire des modèles déjà suivis par
 ``training``/``tuning``) — seulement des artefacts d'analyse (figures + tableaux). Sorties :
-run versionné ``artifacts/explain/<run_id>/`` (4 figures + 3 CSV d'importance), journal
+run versionné ``artifacts/explain/<run_id>/`` (5 figures + 3 CSV d'importance), journal
 (``runs.json``/``runs.md``/``METHODOLOGIE.md``, même convention que les autres modules).
 
 Prérequis : ``indusense-gold`` (gold peuplé) et **au moins un run** ``indusense-tune``
@@ -190,11 +190,11 @@ def compare_models_importance(
 # --- Figures (SVG, même style que training.py/tuning.py) ------------------------------
 def make_figures(
     shap_by_model: dict[str, np.ndarray], X_by_model: dict[str, np.ndarray],
-    feature_names: list[str], comparison: pd.DataFrame, out_dir: Path,
-    top_n: int = config.EXPLAIN_TOP_N,
+    feature_names: list[str], comparison: pd.DataFrame, full_table_b7: pd.DataFrame,
+    out_dir: Path, top_n: int = config.EXPLAIN_TOP_N,
 ) -> list[str]:
-    """4 figures : résumé SHAP (beeswarm échantillonné) B5, résumé SHAP B7, comparaison
-    d'importance normalisée, changement de rang (delta_rank)."""
+    """5 figures : résumé SHAP (beeswarm échantillonné) B5, résumé SHAP B7, comparaison
+    d'importance normalisée, changement de rang (delta_rank), classement complet B7."""
     out_dir.mkdir(parents=True, exist_ok=True)
     sns.set_theme(style="whitegrid")
     plt.rcParams["svg.fonttype"] = "none"
@@ -266,6 +266,39 @@ def make_figures(
           "Mesure : différence de rang d'importance (|SHAP| moyen) entre les deux modèles, "
           "triée par ampleur de changement. Vert = la feature est montée en priorité avec le "
           "tuning ; rouge = elle a descendu ; gris = rang inchangé.")
+
+    # 5. Classement complet (B7 seul) -- valeurs BRUTES : ici un seul modèle, pas de
+    # comparaison inter-modèles, donc le biais d'échelle (cf. section 3) ne s'applique pas.
+    # Toutes les features (pas seulement le top_n) : la longue traîne vers zéro est
+    # elle-même le signal -- la plupart des features ne comptent presque pas.
+    n_features = len(full_table_b7)
+    xlim_cap = 0.3  # cadrage d'affichage (pas un seuil méthodologique) pour lire la traîne
+    fig, ax = plt.subplots(figsize=(8, max(6, n_features * 0.22)))
+    bars = ax.barh(
+        full_table_b7["feature"], full_table_b7["mean_abs_shap"], height=0.6, color="#4C72B0"
+    )
+    ax.invert_yaxis()
+    ax.set_xlim(0, xlim_cap)
+    # Étiquette la valeur exacte sur chaque barre, placée à la main (plutôt que bar_label) :
+    # au-delà de xlim_cap une barre est clippée à l'axe, donc son étiquette est affichée à
+    # l'intérieur (texte blanc) près du bord droit plutôt qu'à la pointe réelle -- invisible
+    # sinon (bar_label positionnerait le texte hors-cadre, peu fiable à l'export SVG).
+    margin = xlim_cap * 0.01
+    for bar, value in zip(bars, full_table_b7["mean_abs_shap"], strict=True):
+        y = bar.get_y() + bar.get_height() / 2
+        if value <= xlim_cap:
+            ax.text(value + margin, y, f"{value:.3f}", va="center", ha="left", fontsize=6)
+        else:
+            ax.text(xlim_cap - margin, y, f"{value:.3f}", va="center", ha="right",
+                    fontsize=6, color="white", fontweight="bold")
+    ax.set(title=f"5. Classement complet des features — {MODEL_LABELS['b7_tune']}",
+           xlabel="|SHAP| moyen (marge/log-odds)")
+    _save(fig, "05_classement_complet_b7.svg",
+          f"Mesure : |SHAP| moyen brut, TOUTES les features ({n_features}), pas seulement "
+          "le top affiché ailleurs -- un seul modèle ici, donc pas de biais d'échelle "
+          "inter-modèles (cf. section 3). Axe cadré à 0-0,3 pour la lisibilité de la longue "
+          "traîne ; les valeurs exactes sont indiquées sur chaque barre (en blanc, dans la "
+          "barre, pour celles dépassant 0,3).")
     return files
 
 
@@ -426,7 +459,8 @@ def run(
     comparison.to_csv(run_dir / "comparaison_importance.csv", index=False)
 
     figures = make_figures(
-        shap_by_model, X_by_model, feature_names, comparison, fig_dir, top_n=top_n
+        shap_by_model, X_by_model, feature_names, comparison, tables["b7_tune"],
+        fig_dir, top_n=top_n,
     )
 
     meta = {

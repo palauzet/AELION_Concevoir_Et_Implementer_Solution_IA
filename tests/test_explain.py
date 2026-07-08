@@ -145,7 +145,7 @@ def test_run_smoke(tmp_path, monkeypatch) -> None:
     assert (run_dir / "importance_b5_sobre.csv").exists()
     assert (run_dir / "importance_b7_tune.csv").exists()
     assert (run_dir / "comparaison_importance.csv").exists()
-    assert len(list((run_dir / "figures").glob("*.svg"))) == 4
+    assert len(list((run_dir / "figures").glob("*.svg"))) == 5
     assert (tmp_path / "explain" / "runs.json").exists()
     assert (tmp_path / "explain" / "runs.md").exists()
     assert (tmp_path / "explain" / "METHODOLOGIE.md").exists()
